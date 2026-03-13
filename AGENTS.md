@@ -10,6 +10,7 @@
 - `legacy/genesis/`: extracted legacy genesis bundle from `xian-abci`
 - `legacy/genesis/contracts/`: contract manifests and source files used by the
   legacy genesis bundle
+- `networks/`: canonical network manifests consumed by `xian-cli`
 
 ## Workflow
 - Preserve compatibility first when moving assets here. Normalize structure only
