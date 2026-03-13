@@ -1,0 +1,9 @@
+{
+  "name": "devnet",
+  "chain_id": "xian-testnet-12",
+  "mode": "join",
+  "runtime_backend": "xian-stack",
+  "genesis_source": "./genesis.json",
+  "snapshot_url": null,
+  "seed_nodes": []
+}

@@ -10,11 +10,14 @@
 - `legacy/genesis/`: extracted legacy genesis bundle from `xian-abci`
 - `legacy/genesis/contracts/`: contract manifests and source files used by the
   legacy genesis bundle
-- `networks/`: canonical network manifests consumed by `xian-cli`
+- `networks/<name>/manifest.json`: canonical per-network manifest consumed by
+  `xian-cli`
+- `networks/<name>/genesis.json`: canonical genesis file colocated with the
+  network manifest
 
 ## Workflow
-- Preserve compatibility first when moving assets here. Normalize structure only
-  after the consuming repos are already reading from this repo.
+- Prefer network-first structure for canonical data. Keep `legacy/` only for
+  extracted archive content and fixtures that have not been normalized yet.
 - Prefer explicit, descriptive filenames. Avoid embedding operator workflows in
   this repo.
 - Keep GitHub references under `xian-technology`.

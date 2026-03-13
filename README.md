@@ -16,9 +16,10 @@ This initial version contains the legacy bundle extracted from `xian-abci`:
 The extraction preserves the old filenames on purpose so the workspace can move
 to this repo without changing behavior at the same time.
 
-The `networks/` directory is the first canonical metadata layer on top of the
-extracted bundle. These manifests point at the extracted genesis files and carry
-seed/snapshot fields even when those values are not populated yet.
+The `networks/` directory is now the canonical active layout. Each network owns
+its own directory, with a colocated `manifest.json` and `genesis.json`. The old
+`legacy/` tree remains as an extracted archive and contract-fixture source, but
+the active canonical manifests no longer point back into it.
 
 ## Intended Direction
 
@@ -29,5 +30,5 @@ This repo is expected to grow into the canonical home for:
 - seed node definitions
 - snapshot metadata
 
-The current `legacy/` layout is transitional. A later cleanup can normalize the
-structure by network once the consumers are stable.
+The current `legacy/` layout is still transitional, but the canonical network
+surface is now network-first rather than extraction-first.

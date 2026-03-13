@@ -1,0 +1,9 @@
+{
+  "name": "rcnet",
+  "chain_id": "xian-network",
+  "mode": "join",
+  "runtime_backend": "xian-stack",
+  "genesis_source": "./genesis.json",
+  "snapshot_url": null,
+  "seed_nodes": []
+}
