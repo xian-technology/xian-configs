@@ -6,20 +6,26 @@ and other chain metadata that should not live inside the universal node runtime.
 
 ## Current Scope
 
-This initial version contains the legacy bundle extracted from `xian-abci`:
+The active stack contract now lives in:
 
-- exported genesis fixtures under `legacy/genesis/`
-- contract manifests under `legacy/genesis/contracts/`
-- contract source files used to build those fixtures
-- canonical network manifests under `networks/`
+- `networks/<name>/manifest.json`
+- `networks/<name>/genesis.json`
+- `contracts/`
 
-The extraction preserves the old filenames on purpose so the workspace can move
-to this repo without changing behavior at the same time.
+`networks/` is the canonical network-first layout. Each network owns its own
+directory, with a colocated `manifest.json` and `genesis.json`. `contracts/`
+contains the canonical contract manifests and source files used for local
+genesis construction.
 
-The `networks/` directory is now the canonical active layout. Each network owns
-its own directory, with a colocated `manifest.json` and `genesis.json`. The old
-`legacy/` tree remains as an extracted archive and contract-fixture source, but
-the active canonical manifests no longer point back into it.
+The old `legacy/` tree remains only as an extracted archive. Active code paths
+should not depend on it.
+
+Canonical manifests now carry an explicit `schema_version`. Validate them from
+the shared workspace with:
+
+```bash
+uv run --project ../xian-cli python ./scripts/validate-manifests.py
+```
 
 ## Intended Direction
 
@@ -30,5 +36,4 @@ This repo is expected to grow into the canonical home for:
 - seed node definitions
 - snapshot metadata
 
-The current `legacy/` layout is still transitional, but the canonical network
-surface is now network-first rather than extraction-first.
+The canonical network surface is network-first rather than extraction-first.

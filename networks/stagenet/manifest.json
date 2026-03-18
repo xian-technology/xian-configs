@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "name": "stagenet",
   "chain_id": "xian-stagenet-1",
   "mode": "join",

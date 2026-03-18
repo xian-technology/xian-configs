@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "name": "testnet",
   "chain_id": "xian-testnet-5",
   "mode": "join",

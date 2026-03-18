@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "name": "rcnet",
   "chain_id": "xian-network",
   "mode": "join",

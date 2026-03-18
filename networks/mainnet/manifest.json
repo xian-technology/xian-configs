@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "name": "mainnet",
   "chain_id": "xian-1",
   "mode": "join",
