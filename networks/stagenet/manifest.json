@@ -6,5 +6,7 @@
   "runtime_backend": "xian-stack",
   "genesis_source": "./genesis.json",
   "snapshot_url": null,
-  "seed_nodes": []
+  "seed_nodes": [],
+  "block_policy_mode": "on_demand",
+  "block_policy_interval": "0s"
 }
