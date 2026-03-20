@@ -8,5 +8,6 @@
   "snapshot_url": null,
   "seed_nodes": [],
   "block_policy_mode": "on_demand",
-  "block_policy_interval": "0s"
+  "block_policy_interval": "0s",
+  "tracer_mode": "python_line_v1"
 }
