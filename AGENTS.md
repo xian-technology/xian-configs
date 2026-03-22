@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## Shared Convention
+- Follow the shared repo convention in `xian-meta/docs/REPO_CONVENTIONS.md`.
+- Keep this repo aligned with that standard for root docs, backlog placement, and folder-level `README.md` files at major boundaries.
+
 ## Scope
 - `xian-configs` owns chain-specific configuration assets for the Xian stack.
 - Keep committed genesis files, contract manifests, seed metadata, and future
