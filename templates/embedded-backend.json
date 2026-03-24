@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "embedded-backend",
+  "display_name": "Embedded Backend",
+  "description": "Application-oriented network defaults for using Xian as a programmable decentralized backend with indexed reads.",
+  "runtime_backend": "xian-stack",
+  "block_policy_mode": "on_demand",
+  "block_policy_interval": "0s",
+  "tracer_mode": "native_instruction_v1",
+  "bootstrap_node_name": "validator-1",
+  "additional_validator_names": [],
+  "service_node": true,
+  "dashboard_enabled": false,
+  "monitoring_enabled": true,
+  "dashboard_host": "127.0.0.1",
+  "dashboard_port": 8080,
+  "pruning_enabled": false,
+  "blocks_to_keep": 100000
+}

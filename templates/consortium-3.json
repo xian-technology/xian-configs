@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "name": "consortium-3",
+  "display_name": "Consortium 3",
+  "description": "Three-validator starter shape with dashboard and monitoring defaults for a small shared-state network.",
+  "runtime_backend": "xian-stack",
+  "block_policy_mode": "idle_interval",
+  "block_policy_interval": "10s",
+  "tracer_mode": "native_instruction_v1",
+  "bootstrap_node_name": "validator-1",
+  "additional_validator_names": [
+    "validator-2",
+    "validator-3"
+  ],
+  "service_node": true,
+  "dashboard_enabled": true,
+  "monitoring_enabled": true,
+  "dashboard_host": "0.0.0.0",
+  "dashboard_port": 18080,
+  "pruning_enabled": false,
+  "blocks_to_keep": 100000
+}

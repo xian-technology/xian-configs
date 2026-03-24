@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "single-node-indexed",
+  "display_name": "Single-Node Indexed",
+  "description": "One node with indexed reads, dashboard access, and monitoring for backend integration work.",
+  "runtime_backend": "xian-stack",
+  "block_policy_mode": "on_demand",
+  "block_policy_interval": "0s",
+  "tracer_mode": "native_instruction_v1",
+  "bootstrap_node_name": "validator-1",
+  "additional_validator_names": [],
+  "service_node": true,
+  "dashboard_enabled": true,
+  "monitoring_enabled": true,
+  "dashboard_host": "0.0.0.0",
+  "dashboard_port": 18080,
+  "pruning_enabled": false,
+  "blocks_to_keep": 100000
+}

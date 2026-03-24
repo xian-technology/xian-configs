@@ -46,6 +46,24 @@ The active stack contract now lives in:
 - `networks/<name>/manifest.json`
 - `networks/<name>/genesis.json`
 - `contracts/`
+- `templates/<name>.json`
 
 The old `legacy/` tree remains only as an extracted archive. Active code paths
 should not depend on it.
+
+`templates/` now contains canonical starter templates for creating purposeful
+new Xian networks. These are not live-network manifests; they are reusable
+defaults consumed by `xian-cli` when creating or joining operator-managed
+networks.
+
+## Intended Direction
+
+This repo is expected to grow into the canonical home for:
+
+- chain metadata
+- genesis files
+- seed node definitions
+- snapshot metadata
+- canonical network templates
+
+The canonical network surface is network-first rather than extraction-first.

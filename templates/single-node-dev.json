@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "single-node-dev",
+  "display_name": "Single-Node Dev",
+  "description": "Fast local contract iteration on one node with the optional dashboard enabled.",
+  "runtime_backend": "xian-stack",
+  "block_policy_mode": "on_demand",
+  "block_policy_interval": "0s",
+  "tracer_mode": "python_line_v1",
+  "bootstrap_node_name": "validator-1",
+  "additional_validator_names": [],
+  "service_node": false,
+  "dashboard_enabled": true,
+  "monitoring_enabled": false,
+  "dashboard_host": "0.0.0.0",
+  "dashboard_port": 18080,
+  "pruning_enabled": false,
+  "blocks_to_keep": 100000
+}
