@@ -3,6 +3,8 @@
 ## Shared Convention
 - Follow the shared repo convention in `xian-meta/docs/REPO_CONVENTIONS.md`.
 - Keep this repo aligned with that standard for root docs, backlog placement, and folder-level `README.md` files at major boundaries.
+- Follow the shared change workflow in `xian-meta/docs/CHANGE_WORKFLOW.md`.
+- Before push, review whether `xian-docs-web` needs updates and run the local validation path that applies to this repo.
 
 ## Scope
 - `xian-configs` owns chain-specific configuration assets for the Xian stack.
