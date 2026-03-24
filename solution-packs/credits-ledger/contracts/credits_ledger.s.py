@@ -60,31 +60,31 @@ def seed(
     issuers[operator] = True
 
 
-def _require_operator():
+def require_operator():
     assert ctx.caller == metadata["operator"], "Only operator can manage issuers."
 
 
-def _require_issuer():
+def require_issuer():
     assert issuers[ctx.caller], "Only issuer can mint or burn on behalf of others."
 
 
 @export
 def set_operator(account: str):
-    _require_operator()
+    require_operator()
     metadata["operator"] = account
     issuers[account] = True
 
 
 @export
 def add_issuer(account: str):
-    _require_operator()
+    require_operator()
     issuers[account] = True
     IssuerAddedEvent({"account": account, "actor": ctx.caller})
 
 
 @export
 def remove_issuer(account: str):
-    _require_operator()
+    require_operator()
     assert account != metadata["operator"], "Operator must remain an issuer."
     issuers[account] = False
     IssuerRemovedEvent({"account": account, "actor": ctx.caller})
@@ -92,7 +92,7 @@ def remove_issuer(account: str):
 
 @export
 def issue(to: str, amount: float):
-    _require_issuer()
+    require_issuer()
     assert amount > 0, "Amount must be positive."
     balances[to] += amount
     metadata["total_supply"] += amount
@@ -119,7 +119,7 @@ def burn(amount: float):
 
 @export
 def burn_from(account: str, amount: float):
-    _require_issuer()
+    require_issuer()
     assert amount > 0, "Amount must be positive."
     assert balances[account] >= amount, "Insufficient balance."
     balances[account] -= amount

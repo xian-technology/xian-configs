@@ -31,6 +31,7 @@ This repo does not own:
 
 ```bash
 uv run --project ../xian-cli python ./scripts/validate-manifests.py
+uv run --project ../xian-linter python ./scripts/validate-solution-pack-contracts.py
 ```
 
 ## Related Docs
