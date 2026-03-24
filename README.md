@@ -23,6 +23,7 @@ This repo does not own:
 
 - `networks/`: network-first manifests and colocated genesis files
 - `contracts/`: canonical contract manifests and source assets
+- `solution-packs/`: reusable pack-specific assets built on top of the canonical templates
 - `scripts/`: config validation helpers
 - `docs/`: repo-local notes and structure guidance
 
@@ -46,6 +47,7 @@ The active stack contract now lives in:
 - `networks/<name>/manifest.json`
 - `networks/<name>/genesis.json`
 - `contracts/`
+- `solution-packs/`
 - `templates/<name>.json`
 
 The old `legacy/` tree remains only as an extracted archive. Active code paths
@@ -68,5 +70,6 @@ This repo is expected to grow into the canonical home for:
 - seed node definitions
 - snapshot metadata
 - canonical network templates
+- solution-pack assets that build on those templates
 
 The canonical network surface is network-first rather than extraction-first.
