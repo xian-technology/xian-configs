@@ -54,7 +54,10 @@ should not depend on it.
 `templates/` now contains canonical starter templates for creating purposeful
 new Xian networks. These are not live-network manifests; they are reusable
 defaults consumed by `xian-cli` when creating or joining operator-managed
-networks.
+networks. Each template now also declares:
+
+- `operator_profile`: the intended operator posture for the network shape
+- `monitoring_profile`: how monitoring defaults should behave for that shape
 
 ## Intended Direction
 

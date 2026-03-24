@@ -7,6 +7,8 @@
   "block_policy_mode": "on_demand",
   "block_policy_interval": "0s",
   "tracer_mode": "python_line_v1",
+  "operator_profile": "local_development",
+  "monitoring_profile": "none",
   "bootstrap_node_name": "validator-1",
   "additional_validator_names": [],
   "service_node": false,
