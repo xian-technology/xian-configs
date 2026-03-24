@@ -14,6 +14,11 @@ These assets are intentionally narrower than the canonical network bundles in
 - pack-specific README guidance that points to the recommended local and remote
   operator templates
 
+Current packs:
+
+- `credits-ledger/`
+- `registry-approval/`
+
 ## Notes
 
 - Solution packs are not live network manifests.
