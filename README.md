@@ -1,31 +1,44 @@
 # xian-configs
 
-`xian-configs` is the configuration and chain-asset repository for the Xian
-workspace. It owns committed network-specific manifests, genesis data, contract
-bundles, and other chain metadata that should not live inside the universal
-runtime repos.
+`xian-configs` is the canonical repository for Xian network definitions and
+chain assets. Use it when you need to define a network, version a genesis or
+manifest, or keep committed contract assets outside the runtime repos.
 
-## Scope
+## Common Workflows
 
-This repo owns:
+Use this repo to:
 
-- canonical network manifests and genesis files
-- committed contract assets used for local and canonical network setup
-- network-specific metadata such as seeds and snapshot references
+- define or review a network manifest under `networks/`
+- keep committed contract assets under `contracts/`
+- maintain reusable starter templates under `templates/`
+- keep solution-pack-specific assets under `solution-packs/`
 
-This repo does not own:
+The main consumer repos are:
 
-- deterministic node logic
-- operator workflow commands
-- Docker or Compose runtime behavior
+- `xian-cli` for network creation and local operator commands
+- `xian-stack` for runtime images and local Compose-based operation
+- `xian-deploy` for remote host deployment
+
+## Principles
+
+- Keep this repo network-first. It should describe networks and committed chain
+  assets, not node runtime behavior.
+- Keep reusable templates separate from live network manifests.
+- Keep contract assets here when they are part of a canonical network or a
+  reusable solution pack, not when they are general runtime code.
+- Prefer explicit, committed manifests over implicit setup logic.
 
 ## Key Directories
 
 - `networks/`: network-first manifests and colocated genesis files
-- `contracts/`: canonical contract manifests and source assets
-- `solution-packs/`: reusable pack-specific assets built on top of the canonical templates
-- `scripts/`: config validation helpers
-- `docs/`: repo-local notes and structure guidance
+- `contracts/`: canonical contract manifests and source assets used by those
+  networks
+- `templates/`: reusable starter templates for creating purposeful Xian
+  networks
+- `solution-packs/`: pack-specific assets that build on top of the network and
+  template layer
+- `scripts/`: validation helpers for manifests and solution-pack assets
+- `docs/`: repo-local architecture and backlog notes
 
 ## Validation
 
@@ -40,37 +53,3 @@ uv run --project ../xian-linter python ./scripts/validate-solution-pack-contract
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/BACKLOG.md](docs/BACKLOG.md)
 - [docs/README.md](docs/README.md)
-
-## Current Layout
-
-The active stack contract now lives in:
-
-- `networks/<name>/manifest.json`
-- `networks/<name>/genesis.json`
-- `contracts/`
-- `solution-packs/`
-- `templates/<name>.json`
-
-The old `legacy/` tree remains only as an extracted archive. Active code paths
-should not depend on it.
-
-`templates/` now contains canonical starter templates for creating purposeful
-new Xian networks. These are not live-network manifests; they are reusable
-defaults consumed by `xian-cli` when creating or joining operator-managed
-networks. Each template now also declares:
-
-- `operator_profile`: the intended operator posture for the network shape
-- `monitoring_profile`: how monitoring defaults should behave for that shape
-
-## Intended Direction
-
-This repo is expected to grow into the canonical home for:
-
-- chain metadata
-- genesis files
-- seed node definitions
-- snapshot metadata
-- canonical network templates
-- solution-pack assets that build on those templates
-
-The canonical network surface is network-first rather than extraction-first.
