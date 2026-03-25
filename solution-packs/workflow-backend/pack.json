@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "name": "workflow-backend",
+  "display_name": "Workflow Backend Pack",
+  "description": "Event-driven shared workflow backend with on-chain state transitions, processor workers, and projected queue/activity views.",
+  "use_case": "Use Xian as the authoritative workflow state machine while Python workers process jobs, hydrate projected queue views, and expose an API for current state and history.",
+  "recommended_local_template": "single-node-indexed",
+  "recommended_remote_template": "embedded-backend",
+  "docs_path": "/solution-packs/workflow-backend",
+  "example_dir": "xian-py/examples/workflow_backend",
+  "contract_paths": [
+    "solution-packs/workflow-backend/contracts/job_workflow.s.py"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local Indexed Starter",
+      "template": "single-node-indexed",
+      "summary": "Run the workflow backend locally with indexed reads, a processor worker, a projector worker, and the deeper API flow.",
+      "network_name": "workflow-backend-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "uv run xian network create workflow-backend-local --template single-node-indexed --chain-id workflow-backend-local-1 --generate-validator-key --init-node",
+            "uv run xian node start validator-1",
+            "uv run xian node endpoints validator-1"
+          ],
+          "notes": [
+            "Run these commands from the xian-cli checkout.",
+            "The indexed local template gives the processor/projector pair the BDS and monitoring surfaces they expect."
+          ]
+        },
+        {
+          "title": "Bootstrap the workflow contract",
+          "commands": [
+            "uv sync --group dev --extra app",
+            "uv run python examples/workflow_backend/admin_job.py"
+          ],
+          "notes": [
+            "Run these commands from the xian-py checkout.",
+            "Set XIAN_NODE_URL, XIAN_CHAIN_ID, XIAN_WALLET_PRIVATE_KEY, and worker-related env vars before bootstrapping."
+          ]
+        },
+        {
+          "title": "Run the processor, projector, and API",
+          "commands": [
+            "uv run python examples/workflow_backend/processor_worker.py",
+            "uv run python examples/workflow_backend/projector_worker.py",
+            "uv run uvicorn examples.workflow_backend.api_service:app --reload --app-dir ."
+          ],
+          "notes": [
+            "The processor claims and completes submitted items. The projector rebuilds queue/activity views from indexed events plus authoritative reads.",
+            "The API exposes current item state and projected queue/activity surfaces."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remote",
+      "display_name": "Remote Embedded-Backend Starter",
+      "template": "embedded-backend",
+      "summary": "Deploy the workflow backend on a remote Linux host and keep the processor/projector/API pattern pointed at the deployed node.",
+      "network_name": "workflow-backend-remote",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create the remote-oriented network bundle",
+          "commands": [
+            "uv run xian network create workflow-backend-remote --template embedded-backend --chain-id workflow-backend-remote-1 --generate-validator-key"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "The embedded-backend template matches the event-driven service posture of this pack."
+          ]
+        },
+        {
+          "title": "Deploy and validate the remote node",
+          "commands": [
+            "ansible-playbook playbooks/bootstrap.yml",
+            "ansible-playbook playbooks/push-home.yml",
+            "ansible-playbook playbooks/deploy.yml",
+            "ansible-playbook playbooks/health.yml"
+          ],
+          "notes": [
+            "Run these commands from the xian-deploy checkout with your inventory and prepared node-home inputs.",
+            "Use the health playbook to confirm runtime, BDS, monitoring, and recovery readiness."
+          ]
+        },
+        {
+          "title": "Bootstrap the contract and run the workflow services",
+          "commands": [
+            "uv sync --group dev --extra app",
+            "uv run python examples/workflow_backend/admin_job.py",
+            "uv run python examples/workflow_backend/processor_worker.py",
+            "uv run python examples/workflow_backend/projector_worker.py",
+            "uv run uvicorn examples.workflow_backend.api_service:app --app-dir ."
+          ],
+          "notes": [
+            "Run these commands from the xian-py checkout against the remote endpoints.",
+            "Keep the processor and projector as separate long-running services so claiming and projection remain explicit."
+          ]
+        }
+      ]
+    }
+  ]
+}

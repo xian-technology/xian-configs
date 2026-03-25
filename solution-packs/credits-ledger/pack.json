@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "name": "credits-ledger",
+  "display_name": "Credits Ledger Pack",
+  "description": "Application-controlled internal credits ledger with issuance, transfers, burns, and indexed activity views.",
+  "use_case": "Use Xian as the authoritative ledger for app credits, balances, grants, burns, and transfer history while normal Python services project and serve app-facing reads.",
+  "recommended_local_template": "single-node-indexed",
+  "recommended_remote_template": "embedded-backend",
+  "docs_path": "/solution-packs/credits-ledger",
+  "example_dir": "xian-py/examples/credits_ledger",
+  "contract_paths": [
+    "solution-packs/credits-ledger/contracts/credits_ledger.s.py"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local Indexed Starter",
+      "template": "single-node-indexed",
+      "summary": "Run the pack locally with indexed reads, dashboard access, monitoring, and the deeper reference-app API/projector flow.",
+      "network_name": "credits-ledger-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "uv run xian network create credits-ledger-local --template single-node-indexed --chain-id credits-ledger-local-1 --generate-validator-key --init-node",
+            "uv run xian node start validator-1",
+            "uv run xian node endpoints validator-1"
+          ],
+          "notes": [
+            "Run these commands from the xian-cli checkout.",
+            "Use the reported RPC, dashboard, and monitoring URLs as the authoritative local endpoints."
+          ]
+        },
+        {
+          "title": "Bootstrap the credits ledger contract",
+          "commands": [
+            "uv sync --group dev --extra app",
+            "uv run python examples/credits_ledger/admin_job.py"
+          ],
+          "notes": [
+            "Run these commands from the xian-py checkout.",
+            "Set XIAN_NODE_URL, XIAN_CHAIN_ID, and XIAN_WALLET_PRIVATE_KEY for the bootstrap wallet."
+          ]
+        },
+        {
+          "title": "Run the projected read model and API",
+          "commands": [
+            "uv run python examples/credits_ledger/projector_worker.py",
+            "uv run uvicorn examples.credits_ledger.api_service:app --reload --app-dir ."
+          ],
+          "notes": [
+            "The projector backfills indexed events first, then tails new ledger activity into SQLite.",
+            "The API exposes both authoritative chain reads and projected balance/activity views."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remote",
+      "display_name": "Remote Embedded-Backend Starter",
+      "template": "embedded-backend",
+      "summary": "Deploy the pack on a Linux host with xian-deploy while keeping the same contract bootstrap and projection/API pattern.",
+      "network_name": "credits-ledger-remote",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create the remote-oriented network bundle",
+          "commands": [
+            "uv run xian network create credits-ledger-remote --template embedded-backend --chain-id credits-ledger-remote-1 --generate-validator-key"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "Use the generated network/profile material as the local source of truth before deploying remote hosts."
+          ]
+        },
+        {
+          "title": "Deploy and verify the remote node",
+          "commands": [
+            "ansible-playbook playbooks/bootstrap.yml",
+            "ansible-playbook playbooks/push-home.yml",
+            "ansible-playbook playbooks/deploy.yml",
+            "ansible-playbook playbooks/health.yml"
+          ],
+          "notes": [
+            "Run these commands from the xian-deploy checkout with your prepared inventory and group vars.",
+            "Use the remote health playbook as the first full validation of BDS, monitoring, and runtime state."
+          ]
+        },
+        {
+          "title": "Bootstrap the contract and run the application side",
+          "commands": [
+            "uv sync --group dev --extra app",
+            "uv run python examples/credits_ledger/admin_job.py",
+            "uv run python examples/credits_ledger/projector_worker.py",
+            "uv run uvicorn examples.credits_ledger.api_service:app --app-dir ."
+          ],
+          "notes": [
+            "Run these commands from the xian-py checkout against the remote RPC/BDS endpoints.",
+            "Use the same projector/API pattern as the local flow, just pointed at the deployed node."
+          ]
+        }
+      ]
+    }
+  ]
+}

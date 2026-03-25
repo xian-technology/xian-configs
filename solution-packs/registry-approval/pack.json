@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "name": "registry-approval",
+  "display_name": "Registry / Approval Pack",
+  "description": "Shared registry with explicit proposal and approval steps before records become active or revoked.",
+  "use_case": "Use Xian as the authoritative shared approval and registry layer while Python services and workers hydrate richer proposal and record views for operators and applications.",
+  "recommended_local_template": "single-node-indexed",
+  "recommended_remote_template": "consortium-3",
+  "docs_path": "/solution-packs/registry-approval",
+  "example_dir": "xian-py/examples/registry_approval",
+  "contract_paths": [
+    "solution-packs/registry-approval/contracts/registry_records.s.py",
+    "solution-packs/registry-approval/contracts/registry_approval.s.py"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local Indexed Starter",
+      "template": "single-node-indexed",
+      "summary": "Run the approval workflow locally with indexed proposal history, projection hydration, and the deeper API/projector flow.",
+      "network_name": "registry-approval-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "uv run xian network create registry-approval-local --template single-node-indexed --chain-id registry-approval-local-1 --generate-validator-key --init-node",
+            "uv run xian node start validator-1",
+            "uv run xian node health validator-1"
+          ],
+          "notes": [
+            "Run these commands from the xian-cli checkout.",
+            "The local indexed template gives you BDS reads and dashboard/monitoring defaults for proposal workflows."
+          ]
+        },
+        {
+          "title": "Bootstrap the registry and approval contracts",
+          "commands": [
+            "uv sync --group dev --extra app",
+            "uv run python examples/registry_approval/admin_job.py"
+          ],
+          "notes": [
+            "Run these commands from the xian-py checkout.",
+            "Set XIAN_NODE_URL, XIAN_CHAIN_ID, XIAN_WALLET_PRIVATE_KEY, and any extra signer env vars before bootstrapping."
+          ]
+        },
+        {
+          "title": "Run the projector and API",
+          "commands": [
+            "uv run python examples/registry_approval/projector_worker.py",
+            "uv run uvicorn examples.registry_approval.api_service:app --reload --app-dir ."
+          ],
+          "notes": [
+            "The projector uses indexed events as triggers and authoritative contract reads to hydrate proposal and record state.",
+            "The API exposes projected pending-approval views alongside direct contract reads."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remote",
+      "display_name": "Remote Consortium Starter",
+      "template": "consortium-3",
+      "summary": "Deploy the pack on a small shared-state network with xian-deploy and use the same proposal, approval, and projection pattern remotely.",
+      "network_name": "registry-approval-remote",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create the shared-network bundle",
+          "commands": [
+            "uv run xian network create registry-approval-remote --template consortium-3 --chain-id registry-approval-remote-1 --generate-validator-key"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "The consortium template is the intended operator posture for this shared approval use case."
+          ]
+        },
+        {
+          "title": "Deploy validators and the service node",
+          "commands": [
+            "ansible-playbook playbooks/bootstrap.yml",
+            "ansible-playbook playbooks/push-home.yml",
+            "ansible-playbook playbooks/deploy.yml",
+            "ansible-playbook playbooks/health.yml"
+          ],
+          "notes": [
+            "Run these commands from the xian-deploy checkout with your inventory for the validator and service-node hosts.",
+            "Use the health playbook to validate BDS, monitoring, and state-sync readiness after deployment."
+          ]
+        },
+        {
+          "title": "Bootstrap contracts and application-side services",
+          "commands": [
+            "uv sync --group dev --extra app",
+            "uv run python examples/registry_approval/admin_job.py",
+            "uv run python examples/registry_approval/projector_worker.py",
+            "uv run uvicorn examples.registry_approval.api_service:app --app-dir ."
+          ],
+          "notes": [
+            "Run these commands from the xian-py checkout against the remote RPC/BDS endpoints.",
+            "Configure additional signers and signer funding in the admin job env before running the approval flow."
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,7 @@ These templates match the intended pack posture:
 
 ## Contents
 
+- `pack.json`: machine-readable starter-flow manifest for `xian-cli`
 - `contracts/registry_records.s.py`: stores the approved registry state
 - `contracts/registry_approval.s.py`: manages signers, proposals, approvals,
   and execution into the registry contract
@@ -28,6 +29,7 @@ These templates match the intended pack posture:
 ## Notes
 
 - This is a solution-pack asset, not a canonical live-network contract.
+- `pack.json` is the canonical machine-readable summary for starter flows.
 - The intended deployed contract names in examples are:
   - `con_registry_records`
   - `con_registry_approval`

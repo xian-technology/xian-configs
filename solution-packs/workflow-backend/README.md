@@ -25,11 +25,13 @@ These templates match the intended pack posture:
 
 ## Contents
 
+- `pack.json`: machine-readable starter-flow manifest for `xian-cli`
 - `contracts/job_workflow.s.py`: the reference workflow state-machine contract
 
 ## Notes
 
 - This is a solution-pack asset, not a canonical live-network contract.
+- `pack.json` is the canonical machine-readable summary for starter flows.
 - The intended deployed contract name in examples is `con_job_workflow`.
 - Python integration examples for this pack live in
   `xian-py/examples/workflow_backend/`.

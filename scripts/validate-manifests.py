@@ -6,7 +6,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 try:
-    from xian_cli.models import read_network_manifest, read_network_template
+    from xian_cli.models import (
+        read_network_manifest,
+        read_network_template,
+        read_solution_pack,
+    )
 except ModuleNotFoundError as exc:
     raise SystemExit(
         "xian-cli must be installed in the current environment; run this "
@@ -30,6 +34,16 @@ def main() -> int:
     for template_path in template_paths:
         read_network_template(template_path)
         print(f"validated {template_path.relative_to(REPO_ROOT)}")
+
+    solution_pack_paths = sorted(
+        (REPO_ROOT / "solution-packs").glob("*/pack.json")
+    )
+    if not solution_pack_paths:
+        raise SystemExit("no canonical solution packs found under solution-packs/")
+
+    for solution_pack_path in solution_pack_paths:
+        read_solution_pack(solution_pack_path)
+        print(f"validated {solution_pack_path.relative_to(REPO_ROOT)}")
 
     return 0
 

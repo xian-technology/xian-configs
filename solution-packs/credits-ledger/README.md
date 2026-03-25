@@ -25,10 +25,12 @@ These templates already match the intended pack posture:
 
 ## Contents
 
+- `pack.json`: machine-readable starter-flow manifest for `xian-cli`
 - `contracts/credits_ledger.s.py`: the reference credits-ledger contract
 
 ## Notes
 
 - This is a solution-pack asset, not a canonical live-network contract.
+- `pack.json` is the canonical machine-readable summary for starter flows.
 - The intended deployed contract name in examples is `con_credits_ledger`.
 - Python integration examples for this pack live in `xian-py/examples/credits_ledger/`.
