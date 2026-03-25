@@ -28,3 +28,10 @@ Current packs:
 - The machine-readable `pack.json` files are the canonical starter-flow source
   for `xian-cli`.
 - Public walkthroughs for these packs belong in `xian-docs-web`.
+
+## Typical Use
+
+- Inspect a pack from `xian-cli` with `xian solution-pack show <name>`.
+- Use `pack.json` as the starter-flow contract for local or remote setup.
+- Keep solution-pack contracts and starter metadata here, while keeping the
+  public narrative and walkthroughs in `xian-docs-web`.

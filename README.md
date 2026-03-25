@@ -13,6 +13,13 @@ Use this repo to:
 - maintain reusable starter templates under `templates/`
 - keep solution-pack-specific assets under `solution-packs/`
 
+Inspect the canonical templates from `xian-cli`:
+
+```bash
+uv run --project ../xian-cli xian network template list
+uv run --project ../xian-cli xian network template show single-node-indexed
+```
+
 The main consumer repos are:
 
 - `xian-cli` for network creation and local operator commands

@@ -21,3 +21,9 @@
   local development, indexed development, shared network, or embedded backend.
 - `monitoring_profile` expresses how the template expects monitoring to work:
   `none`, `local_stack`, or `service_node`.
+
+## Typical Use
+- Choose a template when creating a fresh local or operator-managed network.
+- Choose the matching template again when joining a network into a local
+  profile.
+- Treat these files as reusable defaults, not as live network state.
