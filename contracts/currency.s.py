@@ -384,7 +384,10 @@ def forfeit_stream(stream_id: str) -> str:
 
 
 def calc_outstanding_balance(begins: datetime.datetime, closes: datetime.datetime, rate: float, claimed: float) -> float:
-    claimable_end_point = now if now < closes else closes
+    if now < closes:
+        claimable_end_point = now
+    else:
+        claimable_end_point = closes
     claimable_period = claimable_end_point - begins
     claimable_seconds = claimable_period.seconds
     amount_due = (rate * claimable_seconds) - claimed
@@ -392,7 +395,10 @@ def calc_outstanding_balance(begins: datetime.datetime, closes: datetime.datetim
 
 
 def calc_claimable_amount(amount_due: float, sender:str) -> float:
-    return amount_due if amount_due < balances[sender] else balances[sender]
+    if amount_due < balances[sender]:
+        return amount_due
+
+    return balances[sender]
 
 
 def construct_stream_permit_msg(sender:str, receiver:str, rate:float, begins:str, closes:str, deadline:str) -> str:
