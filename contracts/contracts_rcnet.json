@@ -49,6 +49,13 @@
 			}
 		},
 		{
+			"name": "zk_registry",
+			"owner": null,
+			"constructor_args": {
+				"owner": "governance"
+			}
+		},
+		{
 			"name": "vault",
 			"submit_as": "team_lock",
 			"owner": null,

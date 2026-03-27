@@ -47,6 +47,13 @@
 			"constructor_args": {
 				"membership_contract_name": "masternodes"
 			}
+		},
+		{
+			"name": "zk_registry",
+			"owner": null,
+			"constructor_args": {
+				"owner": "governance"
+			}
 		}
 	]
 }
