@@ -40,6 +40,13 @@
 				"genesis_nodes": ["ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"],
 				"genesis_registration_fee": 100000
 			}
+		},
+		{
+			"name": "governance",
+			"owner": null,
+			"constructor_args": {
+				"membership_contract_name": "masternodes"
+			}
 		}
 	]
 }

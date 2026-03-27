@@ -42,6 +42,13 @@
 			}
 		},
 		{
+			"name": "governance",
+			"owner": null,
+			"constructor_args": {
+				"membership_contract_name": "masternodes"
+			}
+		},
+		{
 			"name": "vault",
 			"submit_as": "team_lock",
 			"owner": null,

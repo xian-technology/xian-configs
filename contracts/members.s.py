@@ -128,6 +128,21 @@ def finalize_vote(proposal_id: int):
 def balance_stream(stream_id: str):
     return dao.balance_stream(stream_id=stream_id)
 
+
+@export
+def get_members():
+    return nodes.get()
+
+
+@export
+def is_member(account: str):
+    return account in nodes.get()
+
+
+@export
+def member_count():
+    return len(nodes.get())
+
 def force_leave(node: str):
     pending_leave[node] = now + datetime.timedelta(days=7)
 
