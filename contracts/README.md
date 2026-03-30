@@ -6,4 +6,7 @@
 ## Notes
 - Treat these as committed shared fixtures, not ad hoc local experiments.
 - Contract changes here affect multiple repos that consume canonical network assets.
-
+- The active preset bundle set is `contracts_local.json`, `contracts_devnet.json`,
+  and `contracts_testnet.json`.
+- The `masternodes` constructor args in those bundles must pin the full shipped
+  validator policy surface explicitly rather than relying on contract defaults.

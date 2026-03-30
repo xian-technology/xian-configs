@@ -1,12 +1,16 @@
-# Networks
+# Network Presets
 
 ## Purpose
-- This folder contains committed network definitions and related assets.
+- This folder contains canonical preset manifests used to build deterministic
+  test and development networks.
 
 ## Contents
-- one directory per known network
-- manifests, genesis assets, and other canonical chain data
+- one directory per supported preset
+- manifest data only; genesis is rendered from the preset's contract bundle
 
 ## Notes
-- Keep network-owned data here, not in `xian-abci` or `xian-cli`.
-
+- Keep preset-owned data here, not in `xian-abci` or `xian-cli`.
+- Preset genesis is rendered from the matching contract bundle under
+  `contracts/contracts_<preset>.json`.
+- Validator policy for active presets is pinned explicitly in those bundles so
+  the preset behavior does not depend on hidden contract defaults.

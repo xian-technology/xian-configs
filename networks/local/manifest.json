@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "name": "testnet",
-  "chain_id": "xian-testnet-1",
+  "name": "local",
+  "chain_id": "xian-local-1",
   "mode": "join",
   "runtime_backend": "xian-stack",
   "node_image_mode": "local_build",
-  "genesis_preset": "testnet",
+  "genesis_preset": "local",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,
   "seed_nodes": [],
-  "block_policy_mode": "idle_interval",
-  "block_policy_interval": "5s",
-  "tracer_mode": "native_instruction_v1"
+  "block_policy_mode": "on_demand",
+  "block_policy_interval": "0s",
+  "tracer_mode": "python_line_v1"
 }

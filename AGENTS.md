@@ -8,17 +8,15 @@
 
 ## Scope
 - `xian-configs` owns chain-specific configuration assets for the Xian stack.
-- Keep committed genesis files, contract manifests, seed metadata, and future
-  snapshot metadata here instead of in `xian-abci`.
+- Keep canonical preset manifests, contract manifests, seed metadata, and
+  future snapshot metadata here instead of in `xian-abci`.
 - Do not add runtime logic, CLI behavior, or Docker orchestration to this repo.
 
 ## Project Layout
-- `networks/<name>/manifest.json`: canonical per-network manifest consumed by
+- `networks/<name>/manifest.json`: canonical preset manifest consumed by
   `xian-cli`
-- `networks/<name>/genesis.json`: canonical genesis file colocated with the
-  network manifest
 - `contracts/`: canonical contract manifests and source files used to build
-  network genesis state
+  deterministic preset genesis state
 - `legacy/`: archival extracted content only; do not add new active assets here
 
 ## Workflow

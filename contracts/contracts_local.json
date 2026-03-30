@@ -1,59 +1,79 @@
 {
-	"extension": ".s.py",
-	"contracts": [
-		{
-			"name": "currency",
-			"owner": null,
-			"constructor_args": {
-				"vk": "ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"
-			}
-		},
-		{
-			"name": "stamp_cost",
-			"owner": "masternodes",
-			"constructor_args": {
-				"initial_rate": 20
-			}
-		},
-		{
-			"name": "rewards",
-			"owner": "masternodes",
-			"constructor_args": null
-		},
-		{
-			"name": "foundation",
-			"owner": null,
-			"constructor_args": {
-				"vk": "ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"
-			}
-		},
-        {
-            "name": "dao",
-            "owner": "masternodes",
-            "constructor_args": null
-        },
-		{
-            "name": "members",
-			"submit_as": "masternodes",
-			"owner": null,
-            "constructor_args": {
-				"genesis_nodes": ["ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"],
-				"genesis_registration_fee": 100000
-			}
-		},
-		{
-			"name": "governance",
-			"owner": null,
-			"constructor_args": {
-				"membership_contract_name": "masternodes"
-			}
-		},
-		{
-			"name": "zk_registry",
-			"owner": null,
-			"constructor_args": {
-				"owner": "governance"
-			}
-		}
-	]
+  "extension": ".s.py",
+  "contracts": [
+    {
+      "name": "currency",
+      "owner": null,
+      "constructor_args": {
+        "vk": "ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"
+      }
+    },
+    {
+      "name": "stamp_cost",
+      "owner": "masternodes",
+      "constructor_args": {
+        "initial_rate": 20
+      }
+    },
+    {
+      "name": "rewards",
+      "owner": "masternodes",
+      "constructor_args": null
+    },
+    {
+      "name": "foundation",
+      "owner": null,
+      "constructor_args": {
+        "vk": "ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"
+      }
+    },
+    {
+      "name": "dao",
+      "owner": "masternodes",
+      "constructor_args": null
+    },
+    {
+      "name": "members",
+      "submit_as": "masternodes",
+      "owner": null,
+      "constructor_args": {
+        "genesis_nodes": [
+          "ee06a34cf08bf72ce592d26d36b90c79daba2829ba9634992d034318160d49f9"
+        ],
+        "genesis_registration_fee": 100000,
+        "default_node_power": 10,
+        "selection_mode": "manual",
+        "max_validators": 5,
+        "power_mode": "equal",
+        "rebalance_interval": 1,
+        "activation_delay_epochs": 0,
+        "unbonding_period_days": 7,
+        "min_self_bond": 0,
+        "min_total_bond": 0,
+        "max_commission_bps": 10000,
+        "max_active_set_churn": 1,
+        "min_bond_margin_bps": 0,
+        "manual_override_enabled": true,
+        "slash_destination": "dao",
+        "duplicate_vote_slash_bps": 500,
+        "duplicate_vote_jail": true,
+        "light_client_attack_slash_bps": 1000,
+        "light_client_attack_jail": true
+      }
+    },
+    {
+      "name": "governance",
+      "owner": null,
+      "constructor_args": {
+        "membership_contract_name": "masternodes"
+      }
+    },
+    {
+      "name": "zk_registry",
+      "owner": null,
+      "constructor_args": {
+        "owner": "governance"
+      }
+    }
+  ]
 }
