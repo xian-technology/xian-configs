@@ -125,7 +125,7 @@ def seed(
     pending_unbond_counter.set(0)
     last_rebalance_epoch.set(None)
     validator_registry.set([])
-    types.set(["add_member", "remove_member", "jail_member", "unjail_member", "slash_member", "set_member_power", "change_registration_fee", "reward_change", "dao_payout", "stamp_cost_change", "change_types", "update_policy", "create_stream", "change_close_time", "finalize_stream", "close_balance_finalize", "topic_vote"])
+    types.set(["add_member", "remove_member", "jail_member", "unjail_member", "slash_member", "set_member_power", "change_registration_fee", "reward_change", "dao_payout", "stamp_cost_change", "change_types", "update_policy", "topic_vote"])
     total_votes.set(0)
     registration_fee.set(genesis_registration_fee)
     config["selection_mode"] = selection_mode
@@ -1601,24 +1601,11 @@ def finalize_vote(proposal_id: int):
         registration_fee.set(current_vote["arg"])
     elif current_vote["type"] == "change_types":
         types.set(current_vote["arg"])
-    elif current_vote["type"] == "create_stream":
-        dao.create_stream(args=current_vote["arg"])
-    elif current_vote["type"] == "change_close_time":
-        dao.change_close_time(args=current_vote["arg"])
-    elif current_vote["type"] == "finalize_stream":
-        dao.finalize_stream(args=current_vote["arg"])
-    elif current_vote["type"] == "close_balance_finalize":
-        dao.close_balance_finalize(args=current_vote["arg"])
 
     current_vote["finalized"] = True
     current_vote["status"] = STATUS_APPROVED
     votes[proposal_id] = current_vote
     return current_vote
-
-
-@export
-def balance_stream(stream_id: str):
-    return dao.balance_stream(stream_id=stream_id)
 
 
 @export

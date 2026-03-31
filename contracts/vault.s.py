@@ -4,11 +4,10 @@ owners = Hash()
 required_signatures = Variable()
 owner_count = Variable()
 transaction_count = Variable()
-stream_id = Variable()
 transactions = Hash()
 
 @construct
-def seed(initial_owners: str, initial_required_signatures: int, stream: str):
+def seed(initial_owners: str, initial_required_signatures: int):
     """
     Initializes the multisig contract.
     - initial_owners: Comma-separated string of owner addresses.
@@ -21,7 +20,6 @@ def seed(initial_owners: str, initial_required_signatures: int, stream: str):
     required_signatures.set(initial_required_signatures)
     owner_count.set(len(owner_list))
     transaction_count.set(0)
-    stream_id.set(stream)
 
 @export
 def submit_transaction(to: str = None, amount: float = None, tx_type: str = 'transfer'):
@@ -107,14 +105,6 @@ def execute_transaction(tx_id: int):
     transactions[tx_id, 'executed'] = True
 
     return f"Transaction {tx_id} executed."
-
-@export
-def balance_stream():
-    """
-    Executes balance_stream function from currency 
-    contract which sends tokens to this contract
-    """
-    currency.balance_stream(stream_id.get())
 
 @export
 def change_currency_metadata(key: str, value: str):
