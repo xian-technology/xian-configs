@@ -2,6 +2,11 @@
   "extension": ".s.py",
   "contracts": [
     {
+      "name": "permit_authorizer",
+      "owner": null,
+      "constructor_args": null
+    },
+    {
       "name": "currency",
       "owner": null,
       "constructor_args": {
