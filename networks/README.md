@@ -14,3 +14,6 @@
   `contracts/contracts_<preset>.json`.
 - Validator policy for active presets is pinned explicitly in those bundles so
   the preset behavior does not depend on hidden contract defaults.
+- The canonical `testnet` preset is also the richest real-network fixture: it
+  pins published node images and release provenance while still deriving fresh
+  deterministic genesis from the current contract bundle.

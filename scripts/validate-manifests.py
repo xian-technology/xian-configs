@@ -28,6 +28,17 @@ REQUIRED_MASTERNODES_CONSTRUCTOR_ARGS = (
     "light_client_attack_slash_bps",
     "light_client_attack_jail",
 )
+CANONICAL_TESTNET_NODE_COUNT = 5
+REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS = (
+    "membership_contract_name",
+    "approval_threshold_numerator",
+    "approval_threshold_denominator",
+    "proposal_expiry_days",
+    "min_patch_delay_blocks",
+    "emergency_threshold_numerator",
+    "emergency_threshold_denominator",
+    "emergency_patch_delay_blocks",
+)
 
 try:
     from xian_cli.models import (
@@ -99,17 +110,212 @@ def validate_contract_bundles() -> None:
                 f"masternodes genesis_nodes must be a non-empty list in {bundle_path}"
             )
 
+        if preset_name == "testnet":
+            if len(genesis_nodes) != CANONICAL_TESTNET_NODE_COUNT:
+                raise SystemExit(
+                    "canonical testnet must define exactly "
+                    f"{CANONICAL_TESTNET_NODE_COUNT} genesis nodes in {bundle_path}"
+                )
+
+            genesis_powers = constructor_args.get("genesis_powers")
+            if not isinstance(genesis_powers, dict):
+                raise SystemExit(
+                    "canonical testnet must define explicit genesis_powers in "
+                    f"{bundle_path}"
+                )
+            if sorted(genesis_powers) != sorted(genesis_nodes):
+                raise SystemExit(
+                    "canonical testnet genesis_powers keys must match "
+                    f"genesis_nodes exactly in {bundle_path}"
+                )
+            if any(
+                not isinstance(power, int) or power <= 0
+                for power in genesis_powers.values()
+            ):
+                raise SystemExit(
+                    "canonical testnet genesis_powers must be positive integers "
+                    f"in {bundle_path}"
+                )
+
+            genesis_reward_keys = constructor_args.get("genesis_reward_keys")
+            if not isinstance(genesis_reward_keys, dict):
+                raise SystemExit(
+                    "canonical testnet must define explicit genesis_reward_keys in "
+                    f"{bundle_path}"
+                )
+            if sorted(genesis_reward_keys) != sorted(genesis_nodes):
+                raise SystemExit(
+                    "canonical testnet genesis_reward_keys keys must match "
+                    f"genesis_nodes exactly in {bundle_path}"
+                )
+            if any(
+                not isinstance(reward_key, str) or not reward_key
+                for reward_key in genesis_reward_keys.values()
+            ):
+                raise SystemExit(
+                    "canonical testnet genesis_reward_keys values must be "
+                    f"non-empty strings in {bundle_path}"
+                )
+
+            rewards_contract = next(
+                (
+                    contract
+                    for contract in contracts
+                    if contract.get("name") == "rewards"
+                ),
+                None,
+            )
+            if rewards_contract is None:
+                raise SystemExit(
+                    f"canonical testnet missing rewards contract in {bundle_path}"
+                )
+            rewards_args = rewards_contract.get("constructor_args")
+            if not isinstance(rewards_args, dict):
+                raise SystemExit(
+                    "canonical testnet must pin rewards constructor_args in "
+                    f"{bundle_path}"
+                )
+            reward_split = rewards_args.get("initial_split")
+            if (
+                not isinstance(reward_split, list)
+                or len(reward_split) != 4
+                or any(not isinstance(item, (int, float)) for item in reward_split)
+            ):
+                raise SystemExit(
+                    "canonical testnet rewards initial_split must be a 4-item "
+                    f"numeric list in {bundle_path}"
+                )
+            if any(item <= 0 for item in reward_split):
+                raise SystemExit(
+                    "canonical testnet rewards initial_split must contain only "
+                    f"positive values in {bundle_path}"
+                )
+            if abs(sum(reward_split) - 1) > 1e-9:
+                raise SystemExit(
+                    "canonical testnet rewards initial_split must sum to 1 in "
+                    f"{bundle_path}"
+                )
+
+            governance_contract = next(
+                (
+                    contract
+                    for contract in contracts
+                    if contract.get("name") == "governance"
+                ),
+                None,
+            )
+            if governance_contract is None:
+                raise SystemExit(
+                    f"canonical testnet missing governance contract in {bundle_path}"
+                )
+            governance_args = governance_contract.get("constructor_args")
+            if not isinstance(governance_args, dict):
+                raise SystemExit(
+                    "canonical testnet must pin governance constructor_args in "
+                    f"{bundle_path}"
+                )
+            missing_governance_keys = [
+                key
+                for key in REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS
+                if key not in governance_args
+            ]
+            if missing_governance_keys:
+                raise SystemExit(
+                    "canonical testnet governance constructor_args must pin the "
+                    f"full surface in {bundle_path}; missing "
+                    f"{missing_governance_keys}"
+                )
+            if governance_args["membership_contract_name"] != "masternodes":
+                raise SystemExit(
+                    "canonical testnet governance membership_contract_name must "
+                    f"be masternodes in {bundle_path}"
+                )
+            if (
+                not isinstance(governance_args["approval_threshold_numerator"], int)
+                or not isinstance(governance_args["approval_threshold_denominator"], int)
+                or governance_args["approval_threshold_numerator"] <= 0
+                or governance_args["approval_threshold_denominator"] <= 0
+                or governance_args["approval_threshold_numerator"]
+                > governance_args["approval_threshold_denominator"]
+            ):
+                raise SystemExit(
+                    "canonical testnet governance approval threshold must be a "
+                    f"valid positive ratio in {bundle_path}"
+                )
+            if (
+                not isinstance(governance_args["emergency_threshold_numerator"], int)
+                or not isinstance(governance_args["emergency_threshold_denominator"], int)
+                or governance_args["emergency_threshold_numerator"] <= 0
+                or governance_args["emergency_threshold_denominator"] <= 0
+                or governance_args["emergency_threshold_numerator"]
+                > governance_args["emergency_threshold_denominator"]
+            ):
+                raise SystemExit(
+                    "canonical testnet governance emergency threshold must be a "
+                    f"valid positive ratio in {bundle_path}"
+                )
+            for key in (
+                "proposal_expiry_days",
+                "min_patch_delay_blocks",
+                "emergency_patch_delay_blocks",
+            ):
+                value = governance_args[key]
+                if not isinstance(value, int) or value <= 0:
+                    raise SystemExit(
+                        f"canonical testnet governance {key} must be a "
+                        f"positive integer in {bundle_path}"
+                    )
+
         print(f"validated {bundle_path.relative_to(REPO_ROOT)}")
 
 
-def main() -> int:
+def validate_network_manifests() -> None:
     manifest_paths = sorted((REPO_ROOT / "networks").glob("*/manifest.json"))
     if not manifest_paths:
         raise SystemExit("no canonical manifests found under networks/")
 
     for manifest_path in manifest_paths:
-        read_network_manifest(manifest_path)
+        manifest = read_network_manifest(manifest_path)
+        if manifest["name"] == "testnet":
+            if manifest["genesis_preset"] != "testnet":
+                raise SystemExit(
+                    "canonical testnet must derive genesis from the testnet preset "
+                    f"in {manifest_path}"
+                )
+            if manifest["genesis_time"] is None:
+                raise SystemExit(
+                    "canonical testnet must pin genesis_time in "
+                    f"{manifest_path}"
+                )
+            if manifest["genesis_source"] is not None:
+                raise SystemExit(
+                    "canonical testnet must not use a checked-in genesis_source in "
+                    f"{manifest_path}"
+                )
+            if manifest["node_image_mode"] != "registry":
+                raise SystemExit(
+                    "canonical testnet must pin published registry images in "
+                    f"{manifest_path}"
+                )
+            if (
+                manifest["node_integrated_image"] is None
+                or manifest["node_split_image"] is None
+            ):
+                raise SystemExit(
+                    "canonical testnet registry image mode requires both node "
+                    f"images in {manifest_path}"
+                )
+            if not isinstance(manifest["node_release_manifest"], dict):
+                raise SystemExit(
+                    "canonical testnet must embed node release provenance in "
+                    f"{manifest_path}"
+                )
+
         print(f"validated {manifest_path.relative_to(REPO_ROOT)}")
+
+
+def main() -> int:
+    validate_network_manifests()
 
     template_paths = sorted((REPO_ROOT / "templates").glob("*.json"))
     if not template_paths:

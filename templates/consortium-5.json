@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "name": "consortium-5",
+  "display_name": "Consortium 5",
+  "description": "Five-validator starter shape with dashboard and monitoring defaults for heavier shared-state and governance testing.",
+  "runtime_backend": "xian-stack",
+  "block_policy_mode": "idle_interval",
+  "block_policy_interval": "10s",
+  "tracer_mode": "native_instruction_v1",
+  "parallel_execution_enabled": false,
+  "parallel_execution_workers": 0,
+  "parallel_execution_min_transactions": 8,
+  "operator_profile": "shared_network",
+  "monitoring_profile": "service_node",
+  "bootstrap_node_name": "validator-1",
+  "additional_validator_names": [
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "service_node": true,
+  "dashboard_enabled": true,
+  "monitoring_enabled": true,
+  "dashboard_host": "0.0.0.0",
+  "dashboard_port": 18080,
+  "pruning_enabled": false,
+  "blocks_to_keep": 100000
+}

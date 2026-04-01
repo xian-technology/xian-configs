@@ -1,4 +1,5 @@
 balances = Hash(default_value=0)
+approvals = Hash(default_value=0)
 metadata = Hash()
 
 TransferEvent = LogEvent(
@@ -55,7 +56,7 @@ def transfer(amount: float, to: str):
 @export
 def approve(amount: float, to: str):
     assert amount >= 0, "Cannot approve negative balances."
-    balances[ctx.caller, to] = amount
+    approvals[ctx.caller, to] = amount
 
     ApproveEvent({"from": ctx.caller, "to": to, "amount": amount})
 
@@ -69,7 +70,7 @@ def approve_from_authorizer(owner: str, spender: str, amount: float):
     ), "Only permit authorizer can approve on behalf of others."
     assert amount >= 0, "Cannot approve negative balances."
 
-    balances[owner, spender] = amount
+    approvals[owner, spender] = amount
 
     ApproveEvent({"from": owner, "to": spender, "amount": amount})
 
@@ -78,11 +79,11 @@ def approve_from_authorizer(owner: str, spender: str, amount: float):
 def transfer_from(amount: float, to: str, main_account: str):
     assert amount > 0, "Cannot send negative balances."
     assert (
-        balances[main_account, ctx.caller] >= amount
-    ), f"Not enough coins approved to send. You have {balances[main_account, ctx.caller]} approved and are trying to spend {amount}"
+        approvals[main_account, ctx.caller] >= amount
+    ), f"Not enough coins approved to send. You have {approvals[main_account, ctx.caller]} approved and are trying to spend {amount}"
     assert balances[main_account] >= amount, "Not enough coins to send."
 
-    balances[main_account, ctx.caller] -= amount
+    approvals[main_account, ctx.caller] -= amount
     balances[main_account] -= amount
     balances[to] += amount
 
