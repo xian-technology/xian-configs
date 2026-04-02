@@ -7,6 +7,11 @@
       "constructor_args": null
     },
     {
+      "name": "token_factory",
+      "owner": null,
+      "constructor_args": null
+    },
+    {
       "name": "currency",
       "owner": null,
       "constructor_args": {
