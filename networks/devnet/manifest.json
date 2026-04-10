@@ -5,6 +5,8 @@
   "mode": "join",
   "runtime_backend": "xian-stack",
   "node_image_mode": "local_build",
+  "shielded_relayer": null,
+  "shielded_relayers": [],
   "genesis_preset": "devnet",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,
