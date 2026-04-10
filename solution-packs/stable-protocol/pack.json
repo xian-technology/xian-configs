@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "name": "stable-protocol",
+  "display_name": "Stable Protocol Pack",
+  "description": "Governance-owned stable-asset protocol with vault issuance, oracle pricing, savings fee routing, liquidations, and a peg stability module.",
+  "use_case": "Use Xian as the authoritative state and governance layer for a full stable-asset protocol while keeping deployment, operator workflows, and downstream dashboards explicit and inspectable.",
+  "recommended_local_template": "single-node-indexed",
+  "recommended_remote_template": "consortium-3",
+  "docs_path": "/solution-packs/stable-protocol",
+  "example_dir": "xian-stable-protocol",
+  "contract_paths": [
+    "solution-packs/stable-protocol/contracts/stable_token.s.py",
+    "solution-packs/stable-protocol/contracts/oracle.s.py",
+    "solution-packs/stable-protocol/contracts/savings.s.py",
+    "solution-packs/stable-protocol/contracts/vaults.s.py",
+    "solution-packs/stable-protocol/contracts/psm.s.py"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local Indexed Starter",
+      "template": "single-node-indexed",
+      "summary": "Run the stable protocol locally with indexed reads, the canonical bootstrap script, sample collateral and reserve tokens, and a usable default vault type.",
+      "network_name": "stable-protocol-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "uv run xian network create stable-protocol-local --template single-node-indexed --chain-id stable-protocol-local-1 --generate-validator-key --init-node",
+            "uv run xian node start validator-1",
+            "uv run xian node endpoints validator-1"
+          ],
+          "notes": [
+            "Run these commands from the xian-cli checkout.",
+            "Use the reported RPC and dashboard URLs as the authoritative local endpoints for protocol bootstrap and inspection."
+          ]
+        },
+        {
+          "title": "Bootstrap the protocol contracts and wiring",
+          "commands": [
+            "uv sync --group dev --group deploy",
+            "uv run pytest -q",
+            "uv run python scripts/bootstrap_protocol.py"
+          ],
+          "notes": [
+            "Run these commands from the xian-stable-protocol checkout.",
+            "The bootstrap script deploys the core protocol, deploys sample collateral/reserve tokens by default, configures the oracle, and seeds the default vault type."
+          ]
+        },
+        {
+          "title": "Start governance handoff when the bootstrap state looks correct",
+          "commands": [
+            "uv run python scripts/bootstrap_protocol.py --start-governance-handoff"
+          ],
+          "notes": [
+            "Run this from the xian-stable-protocol checkout after verifying controllers, oracle state, fee routing, and the default vault type.",
+            "This only starts transfer to the chain governance contract. Acceptance still happens through governance proposals."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remote",
+      "display_name": "Remote Consortium Starter",
+      "template": "consortium-3",
+      "summary": "Deploy the stable protocol on a small shared network, then bootstrap the protocol core against the deployed RPC with the same canonical script.",
+      "network_name": "stable-protocol-remote",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create the shared-network bundle",
+          "commands": [
+            "uv run xian network create stable-protocol-remote --template consortium-3 --chain-id stable-protocol-remote-1 --generate-validator-key"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "The consortium template is the intended remote operator posture for a governance-owned stable protocol."
+          ]
+        },
+        {
+          "title": "Deploy validators and the service node",
+          "commands": [
+            "ansible-playbook playbooks/bootstrap.yml",
+            "ansible-playbook playbooks/push-home.yml",
+            "ansible-playbook playbooks/deploy.yml",
+            "ansible-playbook playbooks/health.yml"
+          ],
+          "notes": [
+            "Run these commands from the xian-deploy checkout with your validator and service-node inventory.",
+            "Use the service node for BDS-backed inspection, monitoring, and any protocol-side automation that is not supposed to run on validators."
+          ]
+        },
+        {
+          "title": "Bootstrap the protocol core against the deployed network",
+          "commands": [
+            "uv sync --group dev --group deploy",
+            "uv run python scripts/bootstrap_protocol.py --skip-sample-tokens"
+          ],
+          "notes": [
+            "Run these commands from the xian-stable-protocol checkout with XIAN_NODE_URL, XIAN_CHAIN_ID, and XIAN_WALLET_PRIVATE_KEY set for the remote network.",
+            "Use --skip-sample-tokens when the collateral and reserve token contracts already exist and only the protocol core needs deployment."
+          ]
+        },
+        {
+          "title": "Start governance handoff after verification",
+          "commands": [
+            "uv run python scripts/bootstrap_protocol.py --start-governance-handoff --skip-sample-tokens"
+          ],
+          "notes": [
+            "Run this from the xian-stable-protocol checkout after verifying the remote bootstrap state.",
+            "Transfer acceptance still happens through ordinary governance proposals on the network."
+          ]
+        }
+      ]
+    }
+  ]
+}
