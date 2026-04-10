@@ -41,6 +41,7 @@ def seed(
     token_name: str,
     token_symbol: str,
     token_logo_url: str,
+    token_logo_svg: str,
     token_website: str,
     initial_supply: Any,
     initial_holder: str,
@@ -49,6 +50,7 @@ def seed(
     assert isinstance(token_name, str) and token_name != "", "token_name must be non-empty."
     assert isinstance(token_symbol, str) and token_symbol != "", "token_symbol must be non-empty."
     assert isinstance(token_logo_url, str), "token_logo_url must be a string."
+    assert isinstance(token_logo_svg, str), "token_logo_svg must be a string."
     assert isinstance(token_website, str), "token_website must be a string."
     assert isinstance(initial_supply, (int, float, decimal)), "initial_supply must be numeric."
     assert initial_supply >= 0, "initial_supply must be non-negative."
@@ -60,6 +62,7 @@ def seed(
     metadata["token_name"] = token_name
     metadata["token_symbol"] = token_symbol
     metadata["token_logo_url"] = token_logo_url
+    metadata["token_logo_svg"] = token_logo_svg
     metadata["token_website"] = token_website
     metadata["total_supply"] = initial_supply
 
@@ -140,6 +143,7 @@ def create_token(
     token_symbol: str,
     initial_supply: Any,
     token_logo_url: str = "",
+    token_logo_svg: str = "",
     token_website: str = "",
     initial_holder: str = None,
     operator_address: str = None,
@@ -152,10 +156,13 @@ def create_token(
 
     if token_logo_url is None:
         token_logo_url = ""
+    if token_logo_svg is None:
+        token_logo_svg = ""
     if token_website is None:
         token_website = ""
 
     assert isinstance(token_logo_url, str), "token_logo_url must be a string."
+    assert isinstance(token_logo_svg, str), "token_logo_svg must be a string."
     assert isinstance(token_website, str), "token_website must be a string."
 
     resolved_initial_holder = resolve_controller(
@@ -173,6 +180,7 @@ def create_token(
             "token_name": token_name,
             "token_symbol": token_symbol,
             "token_logo_url": token_logo_url,
+            "token_logo_svg": token_logo_svg,
             "token_website": token_website,
             "initial_supply": initial_supply,
             "initial_holder": resolved_initial_holder,
