@@ -5,6 +5,22 @@
   "mode": "join",
   "runtime_backend": "xian-stack",
   "node_image_mode": "local_build",
+  "shielded_relayer": null,
+  "shielded_relayers": [
+    {
+      "id": "local-stack",
+      "base_url": "http://127.0.0.1:38180",
+      "auth_scheme": "none",
+      "public_info": true,
+      "public_quote": true,
+      "public_job_lookup": true,
+      "priority": 10,
+      "submission_kinds": [
+        "shielded_note_relay_transfer",
+        "shielded_command"
+      ]
+    }
+  ],
   "genesis_preset": "local",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,
