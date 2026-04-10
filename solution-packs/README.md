@@ -19,6 +19,7 @@ Current packs:
 
 - `credits-ledger/`
 - `registry-approval/`
+- `stable-protocol/`
 - `workflow-backend/`
 
 ## Notes

@@ -1,6 +1,6 @@
 import dao
 import rewards
-import stamp_cost
+import chi_cost
 import currency
 
 nodes = Variable()
@@ -125,7 +125,7 @@ def seed(
     pending_unbond_counter.set(0)
     last_rebalance_epoch.set(None)
     validator_registry.set([])
-    types.set(["add_member", "remove_member", "jail_member", "unjail_member", "slash_member", "set_member_power", "change_registration_fee", "reward_change", "dao_payout", "stamp_cost_change", "change_types", "update_policy", "topic_vote"])
+    types.set(["add_member", "remove_member", "jail_member", "unjail_member", "slash_member", "set_member_power", "change_registration_fee", "reward_change", "dao_payout", "chi_cost_change", "change_types", "update_policy", "topic_vote"])
     total_votes.set(0)
     registration_fee.set(genesis_registration_fee)
     config["selection_mode"] = selection_mode
@@ -1595,8 +1595,8 @@ def finalize_vote(proposal_id: int):
         rewards.set_value(new_value=current_vote["arg"])
     elif current_vote["type"] == "dao_payout":
         dao.transfer_from_dao(args=current_vote["arg"])
-    elif current_vote["type"] == "stamp_cost_change":
-        stamp_cost.set_value(new_value=current_vote["arg"])
+    elif current_vote["type"] == "chi_cost_change":
+        chi_cost.set_value(new_value=current_vote["arg"])
     elif current_vote["type"] == "change_registration_fee":
         registration_fee.set(current_vote["arg"])
     elif current_vote["type"] == "change_types":

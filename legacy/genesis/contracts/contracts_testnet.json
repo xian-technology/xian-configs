@@ -9,7 +9,7 @@
 			}
 		},
 		{
-			"name": "stamp_cost",
+			"name": "chi_cost",
 			"owner": "masternodes",
 			"constructor_args": {
 				"initial_rate": 20

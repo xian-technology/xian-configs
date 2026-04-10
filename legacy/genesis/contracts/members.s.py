@@ -1,6 +1,6 @@
 import dao
 import rewards
-import stamp_cost
+import chi_cost
 import currency
 
 nodes = Variable()
@@ -25,7 +25,7 @@ def seed(genesis_nodes: list, genesis_registration_fee: int):
         "change_registration_fee", 
         "reward_change", 
         "dao_payout", 
-        "stamp_cost_change", 
+        "chi_cost_change", 
         "change_types", 
         "create_stream", 
         "change_close_time", 
@@ -105,8 +105,8 @@ def finalize_vote(proposal_id: int):
         rewards.set_value(new_value=cur_vote["arg"])
     elif cur_vote["type"] == "dao_payout":
         dao.transfer_from_dao(args=cur_vote["arg"])
-    elif cur_vote["type"] == "stamp_cost_change":
-        stamp_cost.set_value(new_value=cur_vote["arg"])
+    elif cur_vote["type"] == "chi_cost_change":
+        chi_cost.set_value(new_value=cur_vote["arg"])
     elif cur_vote["type"] == "change_registration_fee":
         registration_fee.set(cur_vote["arg"])
     elif cur_vote["type"] == "change_types":

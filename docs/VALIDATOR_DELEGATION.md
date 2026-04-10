@@ -439,7 +439,7 @@ Governance vote types should eventually include:
 - `revoke_validator_approval`
 - `set_manual_active_set`
 - `set_validator_commission_cap`
-- existing DAO and stamp-cost actions
+- existing DAO and chi-cost actions
 
 `manual_override_enabled` must allow emergency operation during rollout.
 
