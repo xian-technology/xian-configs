@@ -31,6 +31,7 @@ def seed(vk: str):
     metadata["token_name"] = "XIAN"
     metadata["token_symbol"] = "XIAN"
     metadata["token_logo_url"] = "https://xian.org/assets/img/logo.svg"
+    metadata["token_logo_svg"] = ""
     metadata["token_website"] = "https://xian.org"
     metadata["operator"] = "team_lock"
     metadata["permit_authorizer"] = "permit_authorizer"
