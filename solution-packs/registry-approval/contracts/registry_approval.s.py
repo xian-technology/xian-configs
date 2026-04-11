@@ -8,8 +8,8 @@ proposal_count = Variable()
 signer_count = Variable()
 
 ProposalSubmittedEvent = LogEvent(
-    event="ProposalSubmitted",
-    params={
+    "ProposalSubmitted",
+    {
         "proposal_id": {"type": int, "idx": True},
         "action": {"type": str, "idx": True},
         "record_id": {"type": str, "idx": True},
@@ -18,8 +18,8 @@ ProposalSubmittedEvent = LogEvent(
 )
 
 ProposalApprovedEvent = LogEvent(
-    event="ProposalApproved",
-    params={
+    "ProposalApproved",
+    {
         "proposal_id": {"type": int, "idx": True},
         "approver": {"type": str, "idx": True},
         "approved_count": {"type": int},
@@ -27,8 +27,8 @@ ProposalApprovedEvent = LogEvent(
 )
 
 ProposalExecutedEvent = LogEvent(
-    event="ProposalExecuted",
-    params={
+    "ProposalExecuted",
+    {
         "proposal_id": {"type": int, "idx": True},
         "action": {"type": str, "idx": True},
         "record_id": {"type": str, "idx": True},
@@ -37,24 +37,24 @@ ProposalExecutedEvent = LogEvent(
 )
 
 SignerAddedEvent = LogEvent(
-    event="SignerAdded",
-    params={
+    "SignerAdded",
+    {
         "account": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
     },
 )
 
 SignerRemovedEvent = LogEvent(
-    event="SignerRemoved",
-    params={
+    "SignerRemoved",
+    {
         "account": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
     },
 )
 
 ThresholdChangedEvent = LogEvent(
-    event="ThresholdChanged",
-    params={
+    "ThresholdChanged",
+    {
         "threshold": {"type": int},
         "actor": {"type": str, "idx": True},
     },

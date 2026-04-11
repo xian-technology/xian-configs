@@ -2,8 +2,8 @@ metadata = Hash()
 records = Hash()
 
 RecordUpsertedEvent = LogEvent(
-    event="RecordUpserted",
-    params={
+    "RecordUpserted",
+    {
         "record_id": {"type": str, "idx": True},
         "owner": {"type": str, "idx": True},
         "version": {"type": int},
@@ -12,8 +12,8 @@ RecordUpsertedEvent = LogEvent(
 )
 
 RecordRevokedEvent = LogEvent(
-    event="RecordRevoked",
-    params={
+    "RecordRevoked",
+    {
         "record_id": {"type": str, "idx": True},
         "reason": {"type": str},
         "actor": {"type": str, "idx": True},

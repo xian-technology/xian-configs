@@ -3,8 +3,8 @@ workers = Hash(default_value=False)
 items = Hash()
 
 ItemSubmittedEvent = LogEvent(
-    event="ItemSubmitted",
-    params={
+    "ItemSubmitted",
+    {
         "item_id": {"type": str, "idx": True},
         "kind": {"type": str, "idx": True},
         "requester": {"type": str, "idx": True},
@@ -12,8 +12,8 @@ ItemSubmittedEvent = LogEvent(
 )
 
 ItemClaimedEvent = LogEvent(
-    event="ItemClaimed",
-    params={
+    "ItemClaimed",
+    {
         "item_id": {"type": str, "idx": True},
         "worker": {"type": str, "idx": True},
         "requester": {"type": str},
@@ -21,8 +21,8 @@ ItemClaimedEvent = LogEvent(
 )
 
 ItemCompletedEvent = LogEvent(
-    event="ItemCompleted",
-    params={
+    "ItemCompleted",
+    {
         "item_id": {"type": str, "idx": True},
         "worker": {"type": str, "idx": True},
         "result_uri": {"type": str},
@@ -30,8 +30,8 @@ ItemCompletedEvent = LogEvent(
 )
 
 ItemFailedEvent = LogEvent(
-    event="ItemFailed",
-    params={
+    "ItemFailed",
+    {
         "item_id": {"type": str, "idx": True},
         "worker": {"type": str, "idx": True},
         "reason": {"type": str},
@@ -39,8 +39,8 @@ ItemFailedEvent = LogEvent(
 )
 
 ItemCancelledEvent = LogEvent(
-    event="ItemCancelled",
-    params={
+    "ItemCancelled",
+    {
         "item_id": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
         "reason": {"type": str},
@@ -48,16 +48,16 @@ ItemCancelledEvent = LogEvent(
 )
 
 WorkerAddedEvent = LogEvent(
-    event="WorkerAdded",
-    params={
+    "WorkerAdded",
+    {
         "account": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
     },
 )
 
 WorkerRemovedEvent = LogEvent(
-    event="WorkerRemoved",
-    params={
+    "WorkerRemoved",
+    {
         "account": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
     },

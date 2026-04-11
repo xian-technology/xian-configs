@@ -1,6 +1,6 @@
 VkRegistered = LogEvent(
-    event="VerifyingKeyRegistered",
-    params={
+    "VerifyingKeyRegistered",
+    {
         "vk_id": {"type": str, "idx": True},
         "scheme": {"type": str},
         "curve": {"type": str},
@@ -10,16 +10,16 @@ VkRegistered = LogEvent(
 )
 
 VkStatusChanged = LogEvent(
-    event="VerifyingKeyStatusChanged",
-    params={
+    "VerifyingKeyStatusChanged",
+    {
         "vk_id": {"type": str, "idx": True},
         "active": {"type": bool},
     },
 )
 
 VkLifecycleChanged = LogEvent(
-    event="VerifyingKeyLifecycleChanged",
-    params={
+    "VerifyingKeyLifecycleChanged",
+    {
         "vk_id": {"type": str, "idx": True},
         "deprecated": {"type": bool},
         "replacement_vk_id": {"type": str},

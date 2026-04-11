@@ -1,10 +1,21 @@
 balances = Hash(default_value=0)
+approvals = Hash(default_value=0)
 metadata = Hash()
 issuers = Hash(default_value=False)
+operator = Variable()
 
 TransferEvent = LogEvent(
-    event="Transfer",
-    params={
+    "Transfer",
+    {
+        "from": {"type": str, "idx": True},
+        "to": {"type": str, "idx": True},
+        "amount": {"type": (int, float, decimal)},
+    },
+)
+
+ApproveEvent = LogEvent(
+    "Approve",
+    {
         "from": {"type": str, "idx": True},
         "to": {"type": str, "idx": True},
         "amount": {"type": (int, float, decimal)},
@@ -12,8 +23,8 @@ TransferEvent = LogEvent(
 )
 
 IssueEvent = LogEvent(
-    event="Issue",
-    params={
+    "Issue",
+    {
         "to": {"type": str, "idx": True},
         "amount": {"type": (int, float, decimal)},
         "issuer": {"type": str, "idx": True},
@@ -21,8 +32,8 @@ IssueEvent = LogEvent(
 )
 
 BurnEvent = LogEvent(
-    event="Burn",
-    params={
+    "Burn",
+    {
         "from": {"type": str, "idx": True},
         "amount": {"type": (int, float, decimal)},
         "actor": {"type": str, "idx": True},
@@ -30,16 +41,16 @@ BurnEvent = LogEvent(
 )
 
 IssuerAddedEvent = LogEvent(
-    event="IssuerAdded",
-    params={
+    "IssuerAdded",
+    {
         "account": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
     },
 )
 
 IssuerRemovedEvent = LogEvent(
-    event="IssuerRemoved",
-    params={
+    "IssuerRemoved",
+    {
         "account": {"type": str, "idx": True},
         "actor": {"type": str, "idx": True},
     },
@@ -50,18 +61,27 @@ IssuerRemovedEvent = LogEvent(
 def seed(
     name: str = "Credits Ledger",
     symbol: str = "CRED",
-    operator: str = None,
+    operator_address: str = None,
+    token_logo_url: str = "",
+    token_logo_svg: str = "",
+    token_website: str = "",
 ):
-    operator = operator or ctx.caller
+    resolved_operator = operator_address or ctx.caller
+    operator.set(resolved_operator)
     metadata["name"] = name
     metadata["symbol"] = symbol
-    metadata["operator"] = operator
+    metadata["token_name"] = name
+    metadata["token_symbol"] = symbol
+    metadata["token_logo_url"] = token_logo_url
+    metadata["token_logo_svg"] = token_logo_svg
+    metadata["token_website"] = token_website
+    metadata["operator"] = resolved_operator
     metadata["total_supply"] = 0
-    issuers[operator] = True
+    issuers[resolved_operator] = True
 
 
 def require_operator():
-    assert ctx.caller == metadata["operator"], "Only operator can manage issuers."
+    assert ctx.caller == operator.get(), "Only operator can manage issuers."
 
 
 def require_issuer():
@@ -71,8 +91,16 @@ def require_issuer():
 @export
 def set_operator(account: str):
     require_operator()
+    operator.set(account)
     metadata["operator"] = account
     issuers[account] = True
+
+
+@export
+def change_metadata(key: str, value: Any):
+    require_operator()
+    assert key != "total_supply", "total_supply is managed by the contract."
+    metadata[key] = value
 
 
 @export
@@ -109,6 +137,24 @@ def transfer(amount: float, to: str):
 
 
 @export
+def approve(amount: float, to: str):
+    assert amount >= 0, "Cannot approve negative balances."
+    approvals[ctx.caller, to] = amount
+    ApproveEvent({"from": ctx.caller, "to": to, "amount": amount})
+
+
+@export
+def transfer_from(amount: float, to: str, main_account: str):
+    assert amount > 0, "Amount must be positive."
+    assert approvals[main_account, ctx.caller] >= amount, "Insufficient approved balance."
+    assert balances[main_account] >= amount, "Insufficient balance."
+    approvals[main_account, ctx.caller] -= amount
+    balances[main_account] -= amount
+    balances[to] += amount
+    TransferEvent({"from": main_account, "to": to, "amount": amount})
+
+
+@export
 def burn(amount: float):
     assert amount > 0, "Amount must be positive."
     assert balances[ctx.caller] >= amount, "Insufficient balance."
@@ -128,8 +174,8 @@ def burn_from(account: str, amount: float):
 
 
 @export
-def balance_of(account: str):
-    return balances[account]
+def balance_of(address: str):
+    return balances[address]
 
 
 @export

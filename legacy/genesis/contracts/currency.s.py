@@ -1,27 +1,28 @@
 balances = Hash(default_value=0)
+approvals = Hash(default_value=0)
 metadata = Hash()
 permits = Hash()
 streams = Hash()
 
 TransferEvent = LogEvent(
-    event="Transfer",
-    params={
+    "Transfer",
+    {
         "from": {"type": str, "idx": True},
         "to": {"type": str, "idx": True},
         "amount": {"type": (int, float, decimal)},
     },
 )
 ApproveEvent = LogEvent(
-    event="Approve",
-    params={
+    "Approve",
+    {
         "from": {"type": str, "idx": True},
         "to": {"type": str, "idx": True},
         "amount": {"type": (int, float, decimal)},
     },
 )
 StreamCreatedEvent = LogEvent(
-    event="StreamCreated",
-    params={
+    "StreamCreated",
+    {
         "sender": {"type": str, "idx": True},
         "receiver": {"type": str, "idx": True},
         "stream_id": {"type": str, "idx": True},
@@ -31,8 +32,8 @@ StreamCreatedEvent = LogEvent(
     },
 )
 StreamBalanceEvent = LogEvent(
-    event="StreamBalance",
-    params={
+    "StreamBalance",
+    {
         "receiver": {"type": str, "idx": True},
         "sender": {"type": str, "idx": True},
         "stream_id": {"type": str, "idx": True},
@@ -41,8 +42,8 @@ StreamBalanceEvent = LogEvent(
     },
 )
 StreamCloseChangeEvent = LogEvent(
-    event="StreamCloseChange",
-    params={
+    "StreamCloseChange",
+    {
         "receiver": {"type": str, "idx": True},
         "sender": {"type": str, "idx": True},
         "stream_id": {"type": str, "idx": True},
@@ -50,8 +51,8 @@ StreamCloseChangeEvent = LogEvent(
     },
 )
 StreamForfeitEvent = LogEvent(
-    event="StreamForfeit",
-    params={
+    "StreamForfeit",
+    {
         "receiver": {"type": str, "idx": True},
         "sender": {"type": str, "idx": True},
         "stream_id": {"type": str, "idx": True},
@@ -60,8 +61,8 @@ StreamForfeitEvent = LogEvent(
 )
 
 StreamFinalizedEvent = LogEvent(
-    event="StreamFinalized",
-    params={
+    "StreamFinalized",
+    {
         "receiver": {"type": str, "idx": True},
         "sender": {"type": str, "idx": True},
         "stream_id": {"type": str, "idx": True},
@@ -85,6 +86,13 @@ def seed(vk: str):
     metadata["token_logo_url"] = "https://xian.org/assets/img/logo.svg"
     metadata["token_logo_svg"] = ""
     metadata["token_website"] = "https://xian.org"
+    metadata["total_supply"] = (
+        balances[vk]
+        + balances["team_vesting"]
+        + balances["dao"]
+        + balances["dao_funding_stream"]
+        + balances["team_lock"]
+    )
     metadata["operator"] = "team_lock"
 
     # TEAM LOCK
@@ -115,6 +123,7 @@ def setup_seed_stream(stream_id: str, sender: str, receiver: str, rate: float, d
 @export
 def change_metadata(key: str, value: Any):
     assert ctx.caller == metadata["operator"], "Only operator can set metadata."
+    assert key != "total_supply", "total_supply is managed by the contract."
     metadata[key] = value
 
 
@@ -132,18 +141,18 @@ def transfer(amount: float, to: str):
 @export
 def approve(amount: float, to: str):
     assert amount >= 0, 'Cannot approve negative balances.'
-    balances[ctx.caller, to] = amount
+    approvals[ctx.caller, to] = amount
     ApproveEvent({"from":ctx.caller, "to":to, "amount":amount})
 
 
 @export
 def transfer_from(amount: float, to: str, main_account: str):
     assert amount > 0, 'Cannot send negative balances.'
-    assert balances[main_account, ctx.caller] >= amount, f'Not enough coins approved to send. You have {balances[main_account, ctx.caller]} approved and are trying to spend {amount}'
+    assert approvals[main_account, ctx.caller] >= amount, f'Not enough coins approved to send. You have {approvals[main_account, ctx.caller]} approved and are trying to spend {amount}'
     assert balances[main_account] >= amount, 'Not enough coins to send.'
     
 
-    balances[main_account, ctx.caller] -= amount
+    approvals[main_account, ctx.caller] -= amount
     balances[main_account] -= amount
     balances[to] += amount
 
@@ -167,7 +176,7 @@ def permit(owner: str, spender: str, value: float, deadline: str, signature: str
     assert value >= 0, 'Cannot approve negative balances!'
     assert crypto.verify(owner, permit_msg, signature), 'Invalid signature.'
     
-    balances[owner, spender] = value
+    approvals[owner, spender] = value
     permits[permit_hash] = True
 
     ApproveEvent({"from":owner, "to":spender, "amount":value})

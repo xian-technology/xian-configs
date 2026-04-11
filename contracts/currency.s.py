@@ -33,6 +33,9 @@ def seed(vk: str):
     metadata["token_logo_url"] = "https://xian.org/assets/img/logo.svg"
     metadata["token_logo_svg"] = ""
     metadata["token_website"] = "https://xian.org"
+    metadata["total_supply"] = (
+        balances[vk] + balances["team_lock"] + balances["dao"]
+    )
     metadata["operator"] = "team_lock"
     metadata["permit_authorizer"] = "permit_authorizer"
 
@@ -40,6 +43,7 @@ def seed(vk: str):
 @export
 def change_metadata(key: str, value: Any):
     assert ctx.caller == metadata["operator"], "Only operator can set metadata."
+    assert key != "total_supply", "total_supply is managed by the contract."
     metadata[key] = value
 
 
