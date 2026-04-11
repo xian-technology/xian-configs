@@ -38,10 +38,15 @@ These templates match the intended pack posture:
 
 - This is a solution-pack asset, not a canonical live-network manifest.
 - `pack.json` is the canonical machine-readable summary for starter flows.
+- Current Xian submission rules require user-deployed contracts to start with
+  `con_`.
 - The intended deployed contract names in examples are:
-  - `stable_token`
-  - `oracle`
-  - `savings`
-  - `vaults`
-  - `psm`
+  - `con_stable_token`
+  - `con_oracle`
+  - `con_savings`
+  - `con_vaults`
+  - `con_psm`
+- The default local/staging sample asset names are:
+  - `con_collateral_token`
+  - `con_reserve_token`
 - The bootstrap, wiring, and operator scripts live in `xian-stable-protocol/`.

@@ -45,7 +45,7 @@
           ],
           "notes": [
             "Run these commands from the xian-stable-protocol checkout.",
-            "The bootstrap script deploys the core protocol, deploys sample collateral/reserve tokens by default, configures the oracle, and seeds the default vault type."
+            "The bootstrap script deploys the core protocol under the default con_* contract names, deploys sample collateral/reserve tokens by default, configures the oracle, and seeds the default vault type."
           ]
         },
         {
