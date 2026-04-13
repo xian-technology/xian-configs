@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from generate_token_factory_artifacts import verify_token_factory_artifacts
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_PRESET_NAMES = ("local", "devnet", "testnet")
 REQUIRED_MASTERNODES_CONSTRUCTOR_ARGS = (
@@ -315,6 +317,7 @@ def validate_network_manifests() -> None:
 
 
 def main() -> int:
+    verify_token_factory_artifacts()
     validate_network_manifests()
 
     template_paths = sorted((REPO_ROOT / "templates").glob("*.json"))
