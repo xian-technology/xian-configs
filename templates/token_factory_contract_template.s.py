@@ -28,9 +28,6 @@ def materialize_token_artifact_value(value: str, token_contract: str):
 
 
 def build_token_deployment_artifacts(token_contract: str):
-    runtime_code = materialize_token_artifact_value(
-        XSC001_TOKEN_RUNTIME_TEMPLATE, token_contract
-    )
     vm_ir_json = materialize_token_artifact_value(
         XSC001_TOKEN_VM_IR_TEMPLATE, token_contract
     )
@@ -39,12 +36,10 @@ def build_token_deployment_artifacts(token_contract: str):
         "module_name": token_contract,
         "vm_profile": XSC001_TOKEN_VM_PROFILE,
         "source": XSC001_TOKEN_SOURCE,
-        "runtime_code": runtime_code,
         "vm_ir_json": vm_ir_json,
         "hashes": {
             "input_source_sha256": XSC001_TOKEN_INPUT_SOURCE_SHA256,
             "source_sha256": XSC001_TOKEN_SOURCE_SHA256,
-            "runtime_code_sha256": hashlib.sha256(runtime_code),
             "vm_ir_sha256": hashlib.sha256(vm_ir_json),
         },
     }

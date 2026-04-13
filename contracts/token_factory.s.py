@@ -55,52 +55,6 @@ XSC001_TOKEN_SOURCE = (
     "nt, 'to': to, 'amount': amount})"
 )
 
-XSC001_TOKEN_RUNTIME_TEMPLATE = (
-    "__balances = Hash(default_value=0, contract='__TEMPLATE__', name='balances')\n__approvals"
-    " = Hash(default_value=0, contract='__TEMPLATE__', name='approvals')\n__metadata = Hash(co"
-    "ntract='__TEMPLATE__', name='metadata')\n__operator = Variable(contract='__TEMPLATE__', n"
-    "ame='operator')\n__TransferEvent = LogEvent('Transfer', {'from': indexed(str), 'to': inde"
-    "xed(str), 'amount': (int, float, decimal)}, contract='__TEMPLATE__', name='TransferEvent"
-    "')\n__ApproveEvent = LogEvent('Approve', {'from': indexed(str), 'to': indexed(str), 'amou"
-    "nt': (int, float, decimal)}, contract='__TEMPLATE__', name='ApproveEvent')\n\ndef ____(tok"
-    'en_name: str, token_symbol: str, token_logo_url: str, token_logo_svg: str, token_website'
-    ': str, initial_supply: Any, initial_holder: str, operator_address: str):\n    assert isin'
-    "stance(token_name, str) and token_name != '', 'token_name must be non-empty.'\n    assert"
-    " isinstance(token_symbol, str) and token_symbol != '', 'token_symbol must be non-empty.'"
-    "\n    assert isinstance(token_logo_url, str), 'token_logo_url must be a string.'\n    asse"
-    "rt isinstance(token_logo_svg, str), 'token_logo_svg must be a string.'\n    assert isinst"
-    "ance(token_website, str), 'token_website must be a string.'\n    assert isinstance(initia"
-    "l_supply, (int, float, decimal)), 'initial_supply must be numeric.'\n    assert initial_s"
-    "upply >= 0, 'initial_supply must be non-negative.'\n    assert isinstance(initial_holder,"
-    " str) and initial_holder != '', 'initial_holder must be non-empty.'\n    assert isinstanc"
-    "e(operator_address, str) and operator_address != '', 'operator_address must be non-empty"
-    ".'\n    __balances[initial_holder] = initial_supply\n    __metadata['token_name'] = token_"
-    "name\n    __metadata['token_symbol'] = token_symbol\n    __metadata['token_logo_url'] = to"
-    "ken_logo_url\n    __metadata['token_logo_svg'] = token_logo_svg\n    __metadata['token_web"
-    "site'] = token_website\n    __metadata['total_supply'] = initial_supply\n    __operator.se"
-    "t(operator_address)\n\n@__export('__TEMPLATE__')\ndef change_metadata(key: str, value: Any)"
-    ":\n    assert ctx.caller == __operator.get(), 'Only operator can set metadata!'\n    __met"
-    "adata[key] = value\n\n@__export('__TEMPLATE__')\ndef change_operator(new_operator: str):\n  "
-    "  assert ctx.caller == __operator.get(), 'Only operator can change operator!'\n    assert"
-    " isinstance(new_operator, str) and new_operator != '', 'new_operator must be non-empty.'"
-    "\n    __operator.set(new_operator)\n\n@__export('__TEMPLATE__')\ndef operator_of():\n    retu"
-    "rn __operator.get()\n\n@__export('__TEMPLATE__')\ndef balance_of(address: str):\n    return "
-    "__balances[address]\n\n@__export('__TEMPLATE__')\ndef transfer(amount: float, to: str):\n   "
-    " assert amount > 0, 'Cannot send negative balances!'\n    assert __balances[ctx.caller] >"
-    "= amount, 'Not enough coins to send!'\n    __balances[ctx.caller] -= amount\n    __balance"
-    "s[to] += amount\n    __TransferEvent({'from': ctx.caller, 'to': to, 'amount': amount})\n\n@"
-    "__export('__TEMPLATE__')\ndef approve(amount: float, to: str):\n    assert amount >= 0, 'C"
-    "annot approve negative balances!'\n    __approvals[ctx.caller, to] = amount\n    __Approve"
-    "Event({'from': ctx.caller, 'to': to, 'amount': amount})\n\n@__export('__TEMPLATE__')\ndef t"
-    "ransfer_from(amount: float, to: str, main_account: str):\n    assert amount > 0, 'Cannot "
-    "send negative balances!'\n    assert __approvals[main_account, ctx.caller] >= amount, f'N"
-    'ot enough coins approved to send! You have {__approvals[main_account, ctx.caller]} and a'
-    "re trying to spend {amount}'\n    assert __balances[main_account] >= amount, 'Not enough "
-    "coins to send!'\n    __approvals[main_account, ctx.caller] -= amount\n    __balances[main_"
-    "account] -= amount\n    __balances[to] += amount\n    __TransferEvent({'from': main_accoun"
-    "t, 'to': to, 'amount': amount})"
-)
-
 XSC001_TOKEN_VM_IR_TEMPLATE = (
     '{"docstring": null, "functions": [{"body": [{"message": {"node": "constant", "span": {"c'
     'ol": 61, "end_col": 92, "end_line": 10, "line": 10}, "value": "token_name must be non-em'
@@ -547,82 +501,82 @@ XSC001_TOKEN_VM_IR_TEMPLATE = (
     'al_or_keyword", "name": "main_account", "span": {"col": 42, "end_col": 59, "end_line": 6'
     '2, "line": 62}}], "returns": null, "span": {"col": 0, "end_col": 69, "end_line": 69, "li'
     'ne": 62}, "visibility": "export"}], "global_declarations": [{"args": [], "keywords": [{"'
-    'arg": "default_value", "span": {"col": 16, "end_col": 31, "end_line": 1, "line": 1}, "va'
-    'lue": {"node": "constant", "span": {"col": 30, "end_col": 31, "end_line": 1, "line": 1},'
-    ' "value": 0, "value_type": "int"}}], "name": "balances", "node": "storage_decl", "span":'
-    ' {"col": 0, "end_col": 32, "end_line": 1, "line": 1}, "storage_type": "Hash", "syscall_i'
-    'd": "storage.hash.new"}, {"args": [], "keywords": [{"arg": "default_value", "span": {"co'
-    'l": 17, "end_col": 32, "end_line": 2, "line": 2}, "value": {"node": "constant", "span": '
-    '{"col": 31, "end_col": 32, "end_line": 2, "line": 2}, "value": 0, "value_type": "int"}}]'
-    ', "name": "approvals", "node": "storage_decl", "span": {"col": 0, "end_col": 33, "end_li'
-    'ne": 2, "line": 2}, "storage_type": "Hash", "syscall_id": "storage.hash.new"}, {"args": '
-    '[], "keywords": [], "name": "metadata", "node": "storage_decl", "span": {"col": 0, "end_'
-    'col": 17, "end_line": 3, "line": 3}, "storage_type": "Hash", "syscall_id": "storage.hash'
-    '.new"}, {"args": [], "keywords": [], "name": "operator", "node": "storage_decl", "span":'
-    ' {"col": 0, "end_col": 21, "end_line": 4, "line": 4}, "storage_type": "Variable", "sysca'
-    'll_id": "storage.variable.new"}, {"event_name": "Transfer", "name": "TransferEvent", "no'
-    'de": "event_decl", "params": {"entries": [{"key": {"node": "constant", "span": {"col": 3'
-    '8, "end_col": 44, "end_line": 5, "line": 5}, "value": "from", "value_type": "str"}, "val'
-    'ue": {"args": [{"host_binding_id": null, "id": "str", "node": "name", "span": {"col": 54'
-    ', "end_col": 57, "end_line": 5, "line": 5}}], "event_binding": null, "func": {"host_bind'
-    'ing_id": "event.indexed", "id": "indexed", "node": "name", "span": {"col": 46, "end_col"'
-    ': 53, "end_line": 5, "line": 5}}, "keywords": [], "node": "call", "span": {"col": 46, "e'
-    'nd_col": 58, "end_line": 5, "line": 5}, "syscall_id": "event.indexed"}}, {"key": {"node"'
-    ': "constant", "span": {"col": 60, "end_col": 64, "end_line": 5, "line": 5}, "value": "to'
-    '", "value_type": "str"}, "value": {"args": [{"host_binding_id": null, "id": "str", "node'
-    '": "name", "span": {"col": 74, "end_col": 77, "end_line": 5, "line": 5}}], "event_bindin'
-    'g": null, "func": {"host_binding_id": "event.indexed", "id": "indexed", "node": "name", '
-    '"span": {"col": 66, "end_col": 73, "end_line": 5, "line": 5}}, "keywords": [], "node": "'
-    'call", "span": {"col": 66, "end_col": 78, "end_line": 5, "line": 5}, "syscall_id": "even'
-    't.indexed"}}, {"key": {"node": "constant", "span": {"col": 80, "end_col": 88, "end_line"'
-    ': 5, "line": 5}, "value": "amount", "value_type": "str"}, "value": {"elements": [{"host_'
-    'binding_id": null, "id": "int", "node": "name", "span": {"col": 91, "end_col": 94, "end_'
-    'line": 5, "line": 5}}, {"host_binding_id": null, "id": "float", "node": "name", "span": '
-    '{"col": 96, "end_col": 101, "end_line": 5, "line": 5}}, {"host_binding_id": "numeric.dec'
-    'imal.new", "id": "decimal", "node": "name", "span": {"col": 103, "end_col": 110, "end_li'
-    'ne": 5, "line": 5}}], "node": "tuple", "span": {"col": 90, "end_col": 111, "end_line": 5'
-    ', "line": 5}}}], "node": "dict", "span": {"col": 37, "end_col": 112, "end_line": 5, "lin'
-    'e": 5}}, "span": {"col": 0, "end_col": 113, "end_line": 5, "line": 5}, "syscall_id": "ev'
-    'ent.log.new"}, {"event_name": "Approve", "name": "ApproveEvent", "node": "event_decl", "'
-    'params": {"entries": [{"key": {"node": "constant", "span": {"col": 36, "end_col": 42, "e'
-    'nd_line": 6, "line": 6}, "value": "from", "value_type": "str"}, "value": {"args": [{"hos'
-    't_binding_id": null, "id": "str", "node": "name", "span": {"col": 52, "end_col": 55, "en'
-    'd_line": 6, "line": 6}}], "event_binding": null, "func": {"host_binding_id": "event.inde'
-    'xed", "id": "indexed", "node": "name", "span": {"col": 44, "end_col": 51, "end_line": 6,'
-    ' "line": 6}}, "keywords": [], "node": "call", "span": {"col": 44, "end_col": 56, "end_li'
-    'ne": 6, "line": 6}, "syscall_id": "event.indexed"}}, {"key": {"node": "constant", "span"'
-    ': {"col": 58, "end_col": 62, "end_line": 6, "line": 6}, "value": "to", "value_type": "st'
-    'r"}, "value": {"args": [{"host_binding_id": null, "id": "str", "node": "name", "span": {'
-    '"col": 72, "end_col": 75, "end_line": 6, "line": 6}}], "event_binding": null, "func": {"'
-    'host_binding_id": "event.indexed", "id": "indexed", "node": "name", "span": {"col": 64, '
-    '"end_col": 71, "end_line": 6, "line": 6}}, "keywords": [], "node": "call", "span": {"col'
-    '": 64, "end_col": 76, "end_line": 6, "line": 6}, "syscall_id": "event.indexed"}}, {"key"'
-    ': {"node": "constant", "span": {"col": 78, "end_col": 86, "end_line": 6, "line": 6}, "va'
-    'lue": "amount", "value_type": "str"}, "value": {"elements": [{"host_binding_id": null, "'
-    'id": "int", "node": "name", "span": {"col": 89, "end_col": 92, "end_line": 6, "line": 6}'
-    '}, {"host_binding_id": null, "id": "float", "node": "name", "span": {"col": 94, "end_col'
-    '": 99, "end_line": 6, "line": 6}}, {"host_binding_id": "numeric.decimal.new", "id": "dec'
-    'imal", "node": "name", "span": {"col": 101, "end_col": 108, "end_line": 6, "line": 6}}],'
-    ' "node": "tuple", "span": {"col": 88, "end_col": 109, "end_line": 6, "line": 6}}}], "nod'
-    'e": "dict", "span": {"col": 35, "end_col": 110, "end_line": 6, "line": 6}}, "span": {"co'
-    'l": 0, "end_col": 111, "end_line": 6, "line": 6}, "syscall_id": "event.log.new"}], "host'
-    '_catalog_version": "xian_vm_v1_host_v1", "host_dependencies": [{"binding": "ctx.caller",'
-    ' "category": "context", "id": "context.caller", "kind": "context_field"}, {"binding": "i'
-    'ndexed", "category": "event", "id": "event.indexed", "kind": "syscall"}, {"binding": "Lo'
-    'gEvent.__call__", "category": "event", "id": "event.log.emit", "kind": "syscall"}, {"bin'
-    'ding": "LogEvent", "category": "event", "id": "event.log.new", "kind": "syscall"}, {"bin'
-    'ding": "decimal", "category": "numeric", "id": "numeric.decimal.new", "kind": "syscall"}'
-    ', {"binding": "Hash.__getitem__", "category": "storage", "id": "storage.hash.get", "kind'
-    '": "syscall"}, {"binding": "Hash", "category": "storage", "id": "storage.hash.new", "kin'
-    'd": "syscall"}, {"binding": "Hash.__setitem__", "category": "storage", "id": "storage.ha'
-    'sh.set", "kind": "syscall"}, {"binding": "Variable.get", "category": "storage", "id": "s'
-    'torage.variable.get", "kind": "syscall"}, {"binding": "Variable", "category": "storage",'
-    ' "id": "storage.variable.new", "kind": "syscall"}, {"binding": "Variable.set", "category'
-    '": "storage", "id": "storage.variable.set", "kind": "syscall"}, {"binding": "Any", "cate'
-    'gory": "typing", "id": "typing.any", "kind": "type_marker"}], "imports": [], "ir_version'
-    '": "xian_ir_v1", "module_body": [], "module_name": "__TEMPLATE__", "source_hash": "2fb3e'
-    '276c1fae67986d16ab980daa98e8c740b42fb0e8e8831d3dbbd6c7c3866", "vm_profile": "xian_vm_v1"'
-    '}'
+    'arg": "default_value", "node": "keyword", "span": {"col": 16, "end_col": 31, "end_line":'
+    ' 1, "line": 1}, "value": {"node": "constant", "span": {"col": 30, "end_col": 31, "end_li'
+    'ne": 1, "line": 1}, "value": 0, "value_type": "int"}}], "name": "balances", "node": "sto'
+    'rage_decl", "span": {"col": 0, "end_col": 32, "end_line": 1, "line": 1}, "storage_type":'
+    ' "Hash", "syscall_id": "storage.hash.new"}, {"args": [], "keywords": [{"arg": "default_v'
+    'alue", "node": "keyword", "span": {"col": 17, "end_col": 32, "end_line": 2, "line": 2}, '
+    '"value": {"node": "constant", "span": {"col": 31, "end_col": 32, "end_line": 2, "line": '
+    '2}, "value": 0, "value_type": "int"}}], "name": "approvals", "node": "storage_decl", "sp'
+    'an": {"col": 0, "end_col": 33, "end_line": 2, "line": 2}, "storage_type": "Hash", "sysca'
+    'll_id": "storage.hash.new"}, {"args": [], "keywords": [], "name": "metadata", "node": "s'
+    'torage_decl", "span": {"col": 0, "end_col": 17, "end_line": 3, "line": 3}, "storage_type'
+    '": "Hash", "syscall_id": "storage.hash.new"}, {"args": [], "keywords": [], "name": "oper'
+    'ator", "node": "storage_decl", "span": {"col": 0, "end_col": 21, "end_line": 4, "line": '
+    '4}, "storage_type": "Variable", "syscall_id": "storage.variable.new"}, {"event_name": "T'
+    'ransfer", "name": "TransferEvent", "node": "event_decl", "params": {"entries": [{"key": '
+    '{"node": "constant", "span": {"col": 38, "end_col": 44, "end_line": 5, "line": 5}, "valu'
+    'e": "from", "value_type": "str"}, "value": {"args": [{"host_binding_id": null, "id": "st'
+    'r", "node": "name", "span": {"col": 54, "end_col": 57, "end_line": 5, "line": 5}}], "eve'
+    'nt_binding": null, "func": {"host_binding_id": "event.indexed", "id": "indexed", "node":'
+    ' "name", "span": {"col": 46, "end_col": 53, "end_line": 5, "line": 5}}, "keywords": [], '
+    '"node": "call", "span": {"col": 46, "end_col": 58, "end_line": 5, "line": 5}, "syscall_i'
+    'd": "event.indexed"}}, {"key": {"node": "constant", "span": {"col": 60, "end_col": 64, "'
+    'end_line": 5, "line": 5}, "value": "to", "value_type": "str"}, "value": {"args": [{"host'
+    '_binding_id": null, "id": "str", "node": "name", "span": {"col": 74, "end_col": 77, "end'
+    '_line": 5, "line": 5}}], "event_binding": null, "func": {"host_binding_id": "event.index'
+    'ed", "id": "indexed", "node": "name", "span": {"col": 66, "end_col": 73, "end_line": 5, '
+    '"line": 5}}, "keywords": [], "node": "call", "span": {"col": 66, "end_col": 78, "end_lin'
+    'e": 5, "line": 5}, "syscall_id": "event.indexed"}}, {"key": {"node": "constant", "span":'
+    ' {"col": 80, "end_col": 88, "end_line": 5, "line": 5}, "value": "amount", "value_type": '
+    '"str"}, "value": {"elements": [{"host_binding_id": null, "id": "int", "node": "name", "s'
+    'pan": {"col": 91, "end_col": 94, "end_line": 5, "line": 5}}, {"host_binding_id": null, "'
+    'id": "float", "node": "name", "span": {"col": 96, "end_col": 101, "end_line": 5, "line":'
+    ' 5}}, {"host_binding_id": "numeric.decimal.new", "id": "decimal", "node": "name", "span"'
+    ': {"col": 103, "end_col": 110, "end_line": 5, "line": 5}}], "node": "tuple", "span": {"c'
+    'ol": 90, "end_col": 111, "end_line": 5, "line": 5}}}], "node": "dict", "span": {"col": 3'
+    '7, "end_col": 112, "end_line": 5, "line": 5}}, "span": {"col": 0, "end_col": 113, "end_l'
+    'ine": 5, "line": 5}, "syscall_id": "event.log.new"}, {"event_name": "Approve", "name": "'
+    'ApproveEvent", "node": "event_decl", "params": {"entries": [{"key": {"node": "constant",'
+    ' "span": {"col": 36, "end_col": 42, "end_line": 6, "line": 6}, "value": "from", "value_t'
+    'ype": "str"}, "value": {"args": [{"host_binding_id": null, "id": "str", "node": "name", '
+    '"span": {"col": 52, "end_col": 55, "end_line": 6, "line": 6}}], "event_binding": null, "'
+    'func": {"host_binding_id": "event.indexed", "id": "indexed", "node": "name", "span": {"c'
+    'ol": 44, "end_col": 51, "end_line": 6, "line": 6}}, "keywords": [], "node": "call", "spa'
+    'n": {"col": 44, "end_col": 56, "end_line": 6, "line": 6}, "syscall_id": "event.indexed"}'
+    '}, {"key": {"node": "constant", "span": {"col": 58, "end_col": 62, "end_line": 6, "line"'
+    ': 6}, "value": "to", "value_type": "str"}, "value": {"args": [{"host_binding_id": null, '
+    '"id": "str", "node": "name", "span": {"col": 72, "end_col": 75, "end_line": 6, "line": 6'
+    '}}], "event_binding": null, "func": {"host_binding_id": "event.indexed", "id": "indexed"'
+    ', "node": "name", "span": {"col": 64, "end_col": 71, "end_line": 6, "line": 6}}, "keywor'
+    'ds": [], "node": "call", "span": {"col": 64, "end_col": 76, "end_line": 6, "line": 6}, "'
+    'syscall_id": "event.indexed"}}, {"key": {"node": "constant", "span": {"col": 78, "end_co'
+    'l": 86, "end_line": 6, "line": 6}, "value": "amount", "value_type": "str"}, "value": {"e'
+    'lements": [{"host_binding_id": null, "id": "int", "node": "name", "span": {"col": 89, "e'
+    'nd_col": 92, "end_line": 6, "line": 6}}, {"host_binding_id": null, "id": "float", "node"'
+    ': "name", "span": {"col": 94, "end_col": 99, "end_line": 6, "line": 6}}, {"host_binding_'
+    'id": "numeric.decimal.new", "id": "decimal", "node": "name", "span": {"col": 101, "end_c'
+    'ol": 108, "end_line": 6, "line": 6}}], "node": "tuple", "span": {"col": 88, "end_col": 1'
+    '09, "end_line": 6, "line": 6}}}], "node": "dict", "span": {"col": 35, "end_col": 110, "e'
+    'nd_line": 6, "line": 6}}, "span": {"col": 0, "end_col": 111, "end_line": 6, "line": 6}, '
+    '"syscall_id": "event.log.new"}], "host_catalog_version": "xian_vm_v1_host_v1", "host_dep'
+    'endencies": [{"binding": "ctx.caller", "category": "context", "id": "context.caller", "k'
+    'ind": "context_field"}, {"binding": "indexed", "category": "event", "id": "event.indexed'
+    '", "kind": "syscall"}, {"binding": "LogEvent.__call__", "category": "event", "id": "even'
+    't.log.emit", "kind": "syscall"}, {"binding": "LogEvent", "category": "event", "id": "eve'
+    'nt.log.new", "kind": "syscall"}, {"binding": "decimal", "category": "numeric", "id": "nu'
+    'meric.decimal.new", "kind": "syscall"}, {"binding": "Hash.__getitem__", "category": "sto'
+    'rage", "id": "storage.hash.get", "kind": "syscall"}, {"binding": "Hash", "category": "st'
+    'orage", "id": "storage.hash.new", "kind": "syscall"}, {"binding": "Hash.__setitem__", "c'
+    'ategory": "storage", "id": "storage.hash.set", "kind": "syscall"}, {"binding": "Variable'
+    '.get", "category": "storage", "id": "storage.variable.get", "kind": "syscall"}, {"bindin'
+    'g": "Variable", "category": "storage", "id": "storage.variable.new", "kind": "syscall"},'
+    ' {"binding": "Variable.set", "category": "storage", "id": "storage.variable.set", "kind"'
+    ': "syscall"}, {"binding": "Any", "category": "typing", "id": "typing.any", "kind": "type'
+    '_marker"}], "imports": [], "ir_version": "xian_ir_v1", "module_body": [], "module_name":'
+    ' "__TEMPLATE__", "source_hash": "2fb3e276c1fae67986d16ab980daa98e8c740b42fb0e8e8831d3dbb'
+    'd6c7c3866", "vm_profile": "xian_vm_v1"}'
 )
 
 XSC001_TOKEN_ARTIFACT_FORMAT = "xian_contract_artifact_v1"
@@ -646,9 +600,6 @@ def materialize_token_artifact_value(value: str, token_contract: str):
 
 
 def build_token_deployment_artifacts(token_contract: str):
-    runtime_code = materialize_token_artifact_value(
-        XSC001_TOKEN_RUNTIME_TEMPLATE, token_contract
-    )
     vm_ir_json = materialize_token_artifact_value(
         XSC001_TOKEN_VM_IR_TEMPLATE, token_contract
     )
@@ -657,12 +608,10 @@ def build_token_deployment_artifacts(token_contract: str):
         "module_name": token_contract,
         "vm_profile": XSC001_TOKEN_VM_PROFILE,
         "source": XSC001_TOKEN_SOURCE,
-        "runtime_code": runtime_code,
         "vm_ir_json": vm_ir_json,
         "hashes": {
             "input_source_sha256": XSC001_TOKEN_INPUT_SOURCE_SHA256,
             "source_sha256": XSC001_TOKEN_SOURCE_SHA256,
-            "runtime_code_sha256": hashlib.sha256(runtime_code),
             "vm_ir_sha256": hashlib.sha256(vm_ir_json),
         },
     }

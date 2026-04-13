@@ -54,10 +54,6 @@ def render_generated_block() -> str:
         _chunked_python_string("XSC001_TOKEN_SOURCE", artifacts["source"]),
         "",
         _chunked_python_string(
-            "XSC001_TOKEN_RUNTIME_TEMPLATE", artifacts["runtime_code"]
-        ),
-        "",
-        _chunked_python_string(
             "XSC001_TOKEN_VM_IR_TEMPLATE", artifacts["vm_ir_json"]
         ),
         "",
