@@ -772,11 +772,13 @@ def rebalance_validator_set(force: bool = False):
         else:
             deactivated.append(account)
 
-    while len(selected_accounts) > max_validators:
-        weakest_active = weakest_ranked_account(selected_accounts)
-        selected_accounts = without_item(selected_accounts, weakest_active)
-        if weakest_active not in deactivated:
-            deactivated.append(weakest_active)
+    overflow = len(selected_accounts) - max_validators
+    if overflow > 0:
+        for trim_index in range(overflow):
+            weakest_active = weakest_ranked_account(selected_accounts)
+            selected_accounts = without_item(selected_accounts, weakest_active)
+            if weakest_active not in deactivated:
+                deactivated.append(weakest_active)
 
     for account in ranked_accounts:
         if account in previous_active:
