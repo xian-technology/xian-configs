@@ -7,8 +7,8 @@
   "node_image_mode": "registry",
   "shielded_relayer": null,
   "shielded_relayers": [],
-  "node_integrated_image": "ghcr.io/xian-technology/xian-node@sha256:ea1f8605e71ac86832133fb6db9017618261c0acf44a1afc8fc082e3fbec370a",
-  "node_split_image": "ghcr.io/xian-technology/xian-node-split@sha256:49ca49db34ce2dd59753b311c866b5ea7722808e44718e0afa6f93cd046604a3",
+  "node_integrated_image": "ghcr.io/xian-technology/xian-node@sha256:3dc15d8fee85be05872239ddbb72723a30fb4438bd77b0509c73207c9aa4d3c0",
+  "node_split_image": "ghcr.io/xian-technology/xian-node-split@sha256:64adec4395c27acd10a3fe2a459e56546dca2a0a1d0974d0741723141fbd33ea",
   "genesis_preset": "testnet",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,
@@ -21,24 +21,24 @@
     "components": {
       "xian-abci": {
         "repository": "xian-technology/xian-abci",
-        "ref": "544439faf49ce4f74ebcc4c352a32ac9d4fc18d6"
+        "ref": "b698c8a78a1bfc8c61b9b3deada4c32a9fcb7876"
       },
       "xian-configs": {
         "repository": "xian-technology/xian-configs",
-        "ref": "8a6aa5601a883fbba11e5f9dc97632e37353ce6b"
+        "ref": "fb8f04194d9c2604e8d07fbe7439e6ed635805c5"
       },
       "xian-contracting": {
         "repository": "xian-technology/xian-contracting",
-        "ref": "f12b634d2a8643ebebf3886f5cc27d4b9c921ef7"
+        "ref": "887315f0a8d09a371df7024fd139aa1d76ccb39e"
       },
       "xian-py": {
         "repository": "xian-technology/xian-py",
-        "ref": "21e8e941cdb8ce47ad2a8dbe28f11d23065fadf4"
+        "ref": "0fd51f4d3869382baf4d7bd67e22d72c8b962508"
       }
     },
     "build": {
       "python_image": "python:3.14-bookworm",
-      "cometbft_version": "0.38.22",
+      "cometbft_version": "0.39.1",
       "s6_overlay_version": "3.2.1.0"
     },
     "images": {
