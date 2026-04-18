@@ -24,8 +24,8 @@
     "hidden_sender_submission_mode": "relayer_optional",
     "operator_notice": "Shared relayers on testnet must authenticate submitters and should publish a clear retention and logging policy."
   },
-  "node_integrated_image": "ghcr.io/xian-technology/xian-node@sha256:3dc15d8fee85be05872239ddbb72723a30fb4438bd77b0509c73207c9aa4d3c0",
-  "node_split_image": "ghcr.io/xian-technology/xian-node-split@sha256:64adec4395c27acd10a3fe2a459e56546dca2a0a1d0974d0741723141fbd33ea",
+  "node_integrated_image": "ghcr.io/xian-technology/xian-node@sha256:f9e086af72697a8e70e1810e369f5c18aa989b152165fad3f997ce4f418c8714",
+  "node_split_image": "ghcr.io/xian-technology/xian-node-split@sha256:701bfe878109646e3b0db090f05e4dd73815435a10aa6fa9a308140cd4609d2e",
   "genesis_preset": "testnet",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,
@@ -42,7 +42,7 @@
       },
       "xian-configs": {
         "repository": "xian-technology/xian-configs",
-        "ref": "fb8f04194d9c2604e8d07fbe7439e6ed635805c5"
+        "ref": "9f248723e422423a9bf64e2757789ef8cca33204"
       },
       "xian-contracting": {
         "repository": "xian-technology/xian-contracting",
