@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "network": "testnet",
+  "bundle_policy": {
+    "approved_setup_modes": [
+      "ceremony-import"
+    ],
+    "allow_single_party": false
+  },
+  "artifacts": [],
+  "notes": "Testnet currently publishes no approved shielded proving bundles. Only imported ceremony artifacts are eligible for future approval on this network."
+}

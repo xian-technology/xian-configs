@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -31,6 +32,11 @@ REQUIRED_MASTERNODES_CONSTRUCTOR_ARGS = (
     "light_client_attack_jail",
 )
 CANONICAL_TESTNET_NODE_COUNT = 5
+SUPPORTED_PRIVACY_ARTIFACT_KINDS = {
+    "shielded_note",
+    "shielded_command",
+    "shielded_relay",
+}
 REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS = (
     "membership_contract_name",
     "approval_threshold_numerator",
@@ -271,6 +277,114 @@ def validate_contract_bundles() -> None:
         print(f"validated {bundle_path.relative_to(REPO_ROOT)}")
 
 
+def _sha256_text(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_privacy_artifact_catalog(
+    *,
+    manifest_path: Path,
+    manifest: dict,
+) -> None:
+    catalog_ref = manifest.get("privacy_artifact_catalog")
+    if not isinstance(catalog_ref, dict):
+        raise SystemExit(
+            "canonical network manifests must define privacy_artifact_catalog in "
+            f"{manifest_path}"
+        )
+
+    catalog_path = (manifest_path.parent / catalog_ref["path"]).resolve()
+    if not catalog_path.exists():
+        raise SystemExit(
+            f"privacy artifact catalog path does not exist for {manifest_path}: "
+            f"{catalog_path}"
+        )
+    expected_sha256 = catalog_ref["sha256"]
+    observed_sha256 = _sha256_text(catalog_path)
+    if observed_sha256 != expected_sha256:
+        raise SystemExit(
+            f"privacy artifact catalog sha256 mismatch for {catalog_path}; "
+            f"expected {expected_sha256}, observed {observed_sha256}"
+        )
+
+    payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 1:
+        raise SystemExit(
+            f"privacy artifact catalog schema_version must be 1 in {catalog_path}"
+        )
+    if payload.get("network") != manifest["name"]:
+        raise SystemExit(
+            f"privacy artifact catalog network must match manifest name in {catalog_path}"
+        )
+    bundle_policy = payload.get("bundle_policy")
+    if not isinstance(bundle_policy, dict):
+        raise SystemExit(
+            f"privacy artifact catalog must define bundle_policy in {catalog_path}"
+        )
+    approved_setup_modes = bundle_policy.get("approved_setup_modes")
+    if not isinstance(approved_setup_modes, list) or not approved_setup_modes:
+        raise SystemExit(
+            f"privacy artifact catalog must define non-empty approved_setup_modes in {catalog_path}"
+        )
+    if any(not isinstance(item, str) or not item for item in approved_setup_modes):
+        raise SystemExit(
+            f"privacy artifact catalog approved_setup_modes must contain non-empty strings in {catalog_path}"
+        )
+    if not isinstance(bundle_policy.get("allow_single_party"), bool):
+        raise SystemExit(
+            f"privacy artifact catalog allow_single_party must be boolean in {catalog_path}"
+        )
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise SystemExit(
+            f"privacy artifact catalog artifacts must be a list in {catalog_path}"
+        )
+    for index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            raise SystemExit(
+                f"privacy artifact entry {index} must be an object in {catalog_path}"
+            )
+        if artifact.get("kind") not in SUPPORTED_PRIVACY_ARTIFACT_KINDS:
+            raise SystemExit(
+                f"privacy artifact entry {index} has unsupported kind in {catalog_path}"
+            )
+        registry_manifest_path = artifact.get("registry_manifest_path")
+        if not isinstance(registry_manifest_path, str) or not registry_manifest_path:
+            raise SystemExit(
+                f"privacy artifact entry {index} must define registry_manifest_path in {catalog_path}"
+            )
+        registry_manifest = (catalog_path.parent / registry_manifest_path).resolve()
+        if not registry_manifest.exists():
+            raise SystemExit(
+                f"privacy artifact registry manifest does not exist: {registry_manifest}"
+            )
+        artifact_sha256 = artifact.get("sha256")
+        if (
+            not isinstance(artifact_sha256, str)
+            or len(artifact_sha256) != 64
+            or any(ch not in "0123456789abcdef" for ch in artifact_sha256)
+        ):
+            raise SystemExit(
+                f"privacy artifact entry {index} must define a lowercase sha256 in {catalog_path}"
+            )
+        observed_artifact_sha256 = _sha256_text(registry_manifest)
+        if observed_artifact_sha256 != artifact_sha256:
+            raise SystemExit(
+                f"privacy artifact registry manifest sha256 mismatch for "
+                f"{registry_manifest}; expected {artifact_sha256}, observed "
+                f"{observed_artifact_sha256}"
+            )
+        registry_payload = json.loads(registry_manifest.read_text(encoding="utf-8"))
+        if not isinstance(registry_payload.get("registry_entries"), list):
+            raise SystemExit(
+                f"privacy artifact registry manifest must expose registry_entries in {registry_manifest}"
+            )
+        if registry_payload.get("contract_name") != artifact.get("contract_name"):
+            raise SystemExit(
+                f"privacy artifact contract_name mismatch between catalog and registry manifest in {registry_manifest}"
+            )
+
+
 def validate_network_manifests() -> None:
     manifest_paths = sorted((REPO_ROOT / "networks").glob("*/manifest.json"))
     if not manifest_paths:
@@ -278,6 +392,20 @@ def validate_network_manifests() -> None:
 
     for manifest_path in manifest_paths:
         manifest = read_network_manifest(manifest_path)
+        validate_privacy_artifact_catalog(
+            manifest_path=manifest_path,
+            manifest=manifest,
+        )
+        if not isinstance(manifest.get("shielded_history_policy"), dict):
+            raise SystemExit(
+                "canonical network manifests must define shielded_history_policy in "
+                f"{manifest_path}"
+            )
+        if not isinstance(manifest.get("privacy_submission_policy"), dict):
+            raise SystemExit(
+                "canonical network manifests must define privacy_submission_policy in "
+                f"{manifest_path}"
+            )
         if manifest["name"] == "testnet":
             if manifest["genesis_preset"] != "testnet":
                 raise SystemExit(

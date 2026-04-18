@@ -17,3 +17,10 @@
 - The canonical `testnet` preset is also the richest real-network fixture: it
   pins published node images and release provenance while still deriving fresh
   deterministic genesis from the current contract bundle.
+- Networks can also pin privacy-facing metadata here:
+  - `privacy_artifact_catalog`: a checksum-pinned catalog of approved shielded
+    registry manifests for that network
+  - `shielded_history_policy`: the network's compatibility and retention
+    commitment for `shielded_wallet_history`
+  - `privacy_submission_policy`: operator-facing policy for relayer auth and
+    hidden-sender submission posture

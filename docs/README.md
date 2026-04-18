@@ -6,4 +6,4 @@ Start with:
 
 - `ARCHITECTURE.md`
 - `BACKLOG.md`
-
+- `PRIVACY_NETWORK_PACKAGING.md`

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "network": "devnet",
+  "bundle_policy": {
+    "approved_setup_modes": [
+      "single-party",
+      "ceremony-import"
+    ],
+    "allow_single_party": true
+  },
+  "artifacts": [],
+  "notes": "Devnet does not pin approved shielded proving bundles by default. Any published privacy deployment should carry an explicit registry manifest before promotion."
+}

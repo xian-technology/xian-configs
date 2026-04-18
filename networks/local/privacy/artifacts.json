@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "network": "local",
+  "bundle_policy": {
+    "approved_setup_modes": [
+      "insecure-dev",
+      "single-party",
+      "ceremony-import"
+    ],
+    "allow_single_party": true
+  },
+  "artifacts": [],
+  "notes": "Local development networks do not ship approved shielded proving bundles by default. Operators may generate local-only bundles for testing."
+}

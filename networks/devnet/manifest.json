@@ -7,6 +7,23 @@
   "node_image_mode": "local_build",
   "shielded_relayer": null,
   "shielded_relayers": [],
+  "privacy_artifact_catalog": {
+    "path": "./privacy/artifacts.json",
+    "sha256": "6726f77a745304bb8ce5b7227d8f8e5e2c2b02a6dc672e4e54b7a7aa9cef858d"
+  },
+  "shielded_history_policy": {
+    "feed_version": 1,
+    "compatibility_commitment": "best_effort",
+    "retention_class": "operator_defined",
+    "bds_snapshot_support": true,
+    "operator_notice": "Devnet shielded history is intended for compatibility testing, not long-term archival guarantees."
+  },
+  "privacy_submission_policy": {
+    "disclosure_policy": "user_controlled",
+    "shared_relayer_auth_required": true,
+    "hidden_sender_submission_mode": "relayer_optional",
+    "operator_notice": "Any shared relayer exposed on devnet should require operator-issued credentials and should be treated as a trusted submission hop."
+  },
   "genesis_preset": "devnet",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,

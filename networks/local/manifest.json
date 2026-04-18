@@ -21,6 +21,23 @@
       ]
     }
   ],
+  "privacy_artifact_catalog": {
+    "path": "./privacy/artifacts.json",
+    "sha256": "1c7591f7e6215da644bb476e380541e62d8d2c94316e27a0770103a61ae6aded"
+  },
+  "shielded_history_policy": {
+    "feed_version": 1,
+    "compatibility_commitment": "best_effort",
+    "retention_class": "operator_defined",
+    "bds_snapshot_support": true,
+    "operator_notice": "Local networks may prune or reset indexed shielded history at any time; operators should treat the feed as a development surface."
+  },
+  "privacy_submission_policy": {
+    "disclosure_policy": "user_controlled",
+    "shared_relayer_auth_required": false,
+    "hidden_sender_submission_mode": "relayer_optional",
+    "operator_notice": "The bundled local relayer is for development convenience and should not be treated as a privacy trust boundary."
+  },
   "genesis_preset": "local",
   "genesis_time": "2026-03-30T00:00:00.000000Z",
   "snapshot_url": null,
