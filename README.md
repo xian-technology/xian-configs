@@ -11,7 +11,8 @@ Use this repo to:
 - define or review a network manifest under `networks/`
 - keep committed contract assets under `contracts/`
 - maintain reusable starter templates under `templates/`
-- keep solution-pack-specific assets under `solution-packs/`
+- publish reusable installable modules under `modules/`
+- publish complete application/operator solutions under `solutions/`
 
 Inspect the canonical templates from `xian-cli`:
 
@@ -31,8 +32,8 @@ The main consumer repos are:
 - Keep this repo network-first. It should describe networks and committed chain
   assets, not node runtime behavior.
 - Keep reusable templates separate from live network manifests.
-- Keep contract assets here when they are part of a canonical network or a
-  reusable solution pack, not when they are general runtime code.
+- Keep contract assets here when they are part of a canonical network, a
+  reusable module, or a solution, not when they are general runtime code.
 - Prefer explicit, committed manifests over implicit setup logic.
 
 ## Key Directories
@@ -42,16 +43,17 @@ The main consumer repos are:
   networks
 - `templates/`: reusable starter templates for creating purposeful Xian
   networks
-- `solution-packs/`: pack-specific assets that build on top of the network and
-  template layer
-- `scripts/`: validation helpers for manifests and solution-pack assets
+- `modules/`: reusable on-chain protocol or contract modules
+- `solutions/`: complete app/operator patterns that compose templates, modules,
+  services, examples, and docs
+- `scripts/`: validation helpers for manifests, modules, and solutions
 - `docs/`: repo-local architecture and backlog notes
 
 ## Validation
 
 ```bash
 uv run --project ../xian-cli python ./scripts/validate-manifests.py
-uv run --project ../xian-linter python ./scripts/validate-solution-pack-contracts.py
+uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py
 ```
 
 ## Related Docs

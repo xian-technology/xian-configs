@@ -4,11 +4,11 @@
   "name": "xian-dex",
   "display_name": "Xian DEX",
   "version": "0.1.0",
-  "description": "Pinned DEX solution-pack bundle for local and operator bootstrap flows.",
+  "description": "Pinned DEX module bundle for local and operator bootstrap flows.",
   "source": {
     "repo": "https://github.com/xian-technology/xian-dex",
     "commit": "5c7b85bef8a558622a0223b3c9b2162566e6fdd6",
-    "snapshot_policy": "Vendored into xian-configs for reproducible solution-pack and localnet bootstrap use."
+    "snapshot_policy": "Vendored into xian-configs for reproducible module and localnet bootstrap use."
   },
   "contracts": [
     {

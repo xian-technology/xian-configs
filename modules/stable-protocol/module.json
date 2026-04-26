@@ -1,0 +1,35 @@
+{
+  "schema": "xian.module.v1",
+  "schema_version": 1,
+  "name": "stable-protocol",
+  "display_name": "Stable Protocol Module",
+  "category": "protocol",
+  "maturity": "candidate",
+  "description": "Governance-owned stable-asset protocol contract set with vault issuance, oracle pricing, savings, liquidations, and a peg stability module.",
+  "source_owner_repo": "xian-stable-protocol",
+  "docs_path": "/modules/stable-protocol",
+  "default_recipe": "core",
+  "contract_paths": [
+    "modules/stable-protocol/contracts/stable_token.s.py",
+    "modules/stable-protocol/contracts/oracle.s.py",
+    "modules/stable-protocol/contracts/savings.s.py",
+    "modules/stable-protocol/contracts/vaults.s.py",
+    "modules/stable-protocol/contracts/psm.s.py"
+  ],
+  "contract_bundle_paths": [
+    "modules/stable-protocol/contract-bundle.json"
+  ],
+  "recipes": [
+    {
+      "name": "core",
+      "display_name": "Stable Protocol Core",
+      "summary": "Deploy the stable protocol core through the owning repository bootstrap script.",
+      "install": {
+        "kind": "external",
+        "repo": "xian-stable-protocol",
+        "command": "uv run python scripts/bootstrap_protocol.py"
+      }
+    }
+  ]
+}
+

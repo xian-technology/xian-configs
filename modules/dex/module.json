@@ -1,0 +1,61 @@
+{
+  "schema": "xian.module.v1",
+  "schema_version": 1,
+  "name": "dex",
+  "display_name": "DEX Module",
+  "category": "protocol",
+  "maturity": "candidate",
+  "description": "Canonical Xian AMM contracts under stable contract names for wallets, frontend flows, automation, and tests.",
+  "source_owner_repo": "xian-dex",
+  "docs_path": "/modules/dex",
+  "default_recipe": "core",
+  "contract_paths": [
+    "modules/dex/contracts/con_pairs.s.py",
+    "modules/dex/contracts/con_dex.s.py",
+    "modules/dex/contracts/con_dex_helper.s.py",
+    "modules/dex/contracts/con_lp_token.s.py",
+    "modules/dex/contracts/demo_token.s.py"
+  ],
+  "contract_bundle_paths": [
+    "modules/dex/contract-bundle.json"
+  ],
+  "recipes": [
+    {
+      "name": "core",
+      "display_name": "Core DEX Contracts",
+      "summary": "Deploy the canonical DEX contracts without demo liquidity.",
+      "install": {
+        "kind": "xian-stack.localnet-dex-bootstrap",
+        "deploy_helper": true,
+        "seed_demo_pool": false,
+        "top_up_liquidity": false,
+        "emit_test_swap": false
+      }
+    },
+    {
+      "name": "local-demo",
+      "display_name": "Local Demo DEX",
+      "summary": "Deploy the canonical DEX contracts plus a demo token, LP token, and seeded XIAN/XDT pool.",
+      "install": {
+        "kind": "xian-stack.localnet-dex-bootstrap",
+        "deploy_helper": true,
+        "seed_demo_pool": true,
+        "top_up_liquidity": false,
+        "emit_test_swap": false
+      }
+    },
+    {
+      "name": "production",
+      "display_name": "Production DEX Core",
+      "summary": "Deploy the canonical DEX contracts without local-only demo assets.",
+      "install": {
+        "kind": "xian-stack.localnet-dex-bootstrap",
+        "deploy_helper": true,
+        "seed_demo_pool": false,
+        "top_up_liquidity": false,
+        "emit_test_swap": false
+      }
+    }
+  ]
+}
+

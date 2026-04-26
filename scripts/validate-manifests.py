@@ -51,9 +51,10 @@ REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS = (
 try:
     from xian_cli.contract_bundles import validate_contract_bundle
     from xian_cli.models import (
+        read_module,
         read_network_manifest,
         read_network_template,
-        read_solution_pack,
+        read_solution,
     )
 except ModuleNotFoundError as exc:
     raise SystemExit(
@@ -282,23 +283,76 @@ def _sha256_text(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def validate_solution_pack_contract_bundles() -> None:
-    for solution_pack_path in sorted(
-        (REPO_ROOT / "solution-packs").glob("*/pack.json")
-    ):
-        pack = read_solution_pack(solution_pack_path)
-        for bundle_ref in pack.get("contract_bundle_paths", []):
-            bundle_path = REPO_ROOT / bundle_ref
+def _catalog_ref_path(manifest_path: Path, collection_name: str, ref: str) -> Path:
+    raw_ref = Path(ref)
+    if raw_ref.is_absolute():
+        return raw_ref
+    for parent in manifest_path.resolve().parents:
+        if parent.name == collection_name:
+            return (parent.parent / raw_ref).resolve()
+    return (manifest_path.parent / raw_ref).resolve()
+
+
+def validate_modules() -> None:
+    module_paths = sorted((REPO_ROOT / "modules").glob("*/module.json"))
+    if not module_paths:
+        raise SystemExit("no canonical modules found under modules/")
+
+    for module_path in module_paths:
+        module = read_module(module_path)
+        for contract_ref in module["contract_paths"]:
+            contract_path = _catalog_ref_path(
+                module_path, "modules", contract_ref
+            )
+            if not contract_path.exists():
+                raise SystemExit(f"module contract not found: {contract_ref}")
+
+        for bundle_ref in module["contract_bundle_paths"]:
+            bundle_path = _catalog_ref_path(
+                module_path, "modules", bundle_ref
+            )
             if not bundle_path.exists():
-                raise SystemExit(
-                    f"solution pack bundle not found: {bundle_ref}"
-                )
+                raise SystemExit(f"module bundle not found: {bundle_ref}")
             result = validate_contract_bundle(bundle_path)
             print(
                 "validated "
                 f"{bundle_path.relative_to(REPO_ROOT)} "
                 f"({len(result['contracts'])} contracts)"
             )
+
+        print(f"validated {module_path.relative_to(REPO_ROOT)}")
+
+
+def validate_solutions() -> None:
+    solution_paths = sorted((REPO_ROOT / "solutions").glob("*/solution.json"))
+    if not solution_paths:
+        raise SystemExit("no canonical solutions found under solutions/")
+
+    for solution_path in solution_paths:
+        solution = read_solution(solution_path)
+        for module_ref in solution["modules"]:
+            module_name = module_ref["name"]
+            module_path = REPO_ROOT / "modules" / module_name / "module.json"
+            if not module_path.exists():
+                raise SystemExit(
+                    "solution references missing module: "
+                    f"{solution['name']} -> {module_name}"
+                )
+
+        for contract_ref in solution["contract_paths"]:
+            contract_path = _catalog_ref_path(
+                solution_path, "solutions", contract_ref
+            )
+            if not contract_path.exists():
+                raise SystemExit(f"solution contract not found: {contract_ref}")
+
+        for bundle_ref in solution["contract_bundle_paths"]:
+            bundle_path = _catalog_ref_path(
+                solution_path, "solutions", bundle_ref
+            )
+            if not bundle_path.exists():
+                raise SystemExit(f"solution bundle not found: {bundle_ref}")
+        print(f"validated {solution_path.relative_to(REPO_ROOT)}")
 
 
 def validate_privacy_artifact_catalog(
@@ -476,17 +530,8 @@ def main() -> int:
         read_network_template(template_path)
         print(f"validated {template_path.relative_to(REPO_ROOT)}")
 
-    solution_pack_paths = sorted(
-        (REPO_ROOT / "solution-packs").glob("*/pack.json")
-    )
-    if not solution_pack_paths:
-        raise SystemExit("no canonical solution packs found under solution-packs/")
-
-    for solution_pack_path in solution_pack_paths:
-        read_solution_pack(solution_pack_path)
-        print(f"validated {solution_pack_path.relative_to(REPO_ROOT)}")
-
-    validate_solution_pack_contract_bundles()
+    validate_modules()
+    validate_solutions()
     validate_contract_bundles()
 
     return 0
