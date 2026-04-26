@@ -71,18 +71,20 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
-      - name: Validate manifests and solution-pack contracts
+      - name: Validate manifests and packaged contracts
         working-directory: xian-configs
         run: |
           uv run --project ../xian-contracting python \
             ../xian-contracting/scripts/audit_python_vm_compatibility.py \
             ./contracts \
-            ./solution-packs \
+            ./modules \
+            ./solutions \
             --fail-on-issues
           uv run --project ../xian-contracting python \
             ../xian-contracting/scripts/audit_authored_conformance.py \
             ./contracts \
-            ./solution-packs \
+            ./modules \
+            ./solutions \
             --fail-on-issues
           uv run --project ../xian-cli python ./scripts/validate-manifests.py
-          uv run --project ../xian-linter python ./scripts/validate-solution-pack-contracts.py
+          uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py
