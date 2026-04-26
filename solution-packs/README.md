@@ -11,6 +11,7 @@ These assets are intentionally narrower than the canonical network bundles in
 
 - one folder per solution pack
 - `pack.json` machine-readable starter-flow manifest in each pack folder
+- optional `contract-bundle.json` files for hash-pinned multi-contract bundles
 - pack-specific contract assets
 - pack-specific README guidance that points to the recommended local and remote
   operator templates
@@ -18,6 +19,7 @@ These assets are intentionally narrower than the canonical network bundles in
 Current packs:
 
 - `credits-ledger/`
+- `dex/`
 - `registry-approval/`
 - `stable-protocol/`
 - `workflow-backend/`

@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "name": "dex",
+  "display_name": "DEX Pack",
+  "description": "Canonical Xian AMM contracts with an idempotent local bootstrap path and a demo XIAN/XDT pool.",
+  "use_case": "Run the Xian DEX under known contract names so wallets, the SnakX web app, automation services, and integration tests can rely on the same AMM surface.",
+  "recommended_local_template": "single-node-indexed",
+  "recommended_remote_template": "consortium-3",
+  "docs_path": "/solution-packs/dex",
+  "example_dir": "xian-dex",
+  "contract_paths": [
+    "solution-packs/dex/contracts/con_pairs.s.py",
+    "solution-packs/dex/contracts/con_dex.s.py",
+    "solution-packs/dex/contracts/con_dex_helper.s.py",
+    "solution-packs/dex/contracts/con_lp_token.s.py",
+    "solution-packs/dex/contracts/demo_token.s.py"
+  ],
+  "contract_bundle_paths": [
+    "solution-packs/dex/contract-bundle.json"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local DEX Starter",
+      "template": "single-node-indexed",
+      "summary": "Run a local indexed node, deploy the pinned DEX bundle, and seed a demo liquid pair for the DEX web app and automation tests.",
+      "network_name": "dex-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "make localnet-init",
+            "make localnet-up-with-dex"
+          ],
+          "notes": [
+            "Run these commands from the xian-stack checkout.",
+            "The localnet-up-with-dex target starts the localnet and then deploys the pinned DEX bundle."
+          ]
+        },
+        {
+          "title": "Inspect the local DEX endpoints",
+          "commands": [
+            "make localnet-status",
+            "python3 ./scripts/backend.py endpoints --service-node"
+          ],
+          "notes": [
+            "Run this command from the xian-stack checkout.",
+            "Use the reported RPC and indexed-read endpoints for the DEX web app and automation services."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remote",
+      "display_name": "Remote DEX Starter",
+      "template": "consortium-3",
+      "summary": "Deploy a small shared network, then bootstrap the pinned DEX bundle against the service RPC with an explicit operator wallet.",
+      "network_name": "dex-remote",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create the shared-network bundle",
+          "commands": [
+            "uv run xian network create dex-remote --template consortium-3 --chain-id dex-remote-1 --generate-validator-key"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "The consortium template is the recommended remote operator posture for a shared DEX network."
+          ]
+        },
+        {
+          "title": "Deploy and verify the remote nodes",
+          "commands": [
+            "ansible-playbook playbooks/bootstrap.yml",
+            "ansible-playbook playbooks/push-home.yml",
+            "ansible-playbook playbooks/deploy.yml",
+            "ansible-playbook playbooks/health.yml"
+          ],
+          "notes": [
+            "Run these commands from the xian-deploy checkout with your prepared inventory.",
+            "Use a service node for indexed reads, DEX web inspection, and automation services."
+          ]
+        },
+        {
+          "title": "Bootstrap the pinned DEX bundle",
+          "commands": [
+            "python3 ./scripts/backend.py localnet-dex-bootstrap --rpc-url http://<rpc-host>:26657 --chain-id dex-remote-1 --deployer-private-key <bootstrap-wallet-private-key> --no-seed-demo-pool"
+          ],
+          "notes": [
+            "Run this command from the xian-stack checkout.",
+            "For production-like deployments, configure real pairs and LP tokens explicitly instead of seeding the demo pool."
+          ]
+        }
+      ]
+    }
+  ]
+}

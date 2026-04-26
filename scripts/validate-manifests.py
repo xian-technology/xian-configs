@@ -49,6 +49,7 @@ REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS = (
 )
 
 try:
+    from xian_cli.contract_bundles import validate_contract_bundle
     from xian_cli.models import (
         read_network_manifest,
         read_network_template,
@@ -281,6 +282,25 @@ def _sha256_text(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def validate_solution_pack_contract_bundles() -> None:
+    for solution_pack_path in sorted(
+        (REPO_ROOT / "solution-packs").glob("*/pack.json")
+    ):
+        pack = read_solution_pack(solution_pack_path)
+        for bundle_ref in pack.get("contract_bundle_paths", []):
+            bundle_path = REPO_ROOT / bundle_ref
+            if not bundle_path.exists():
+                raise SystemExit(
+                    f"solution pack bundle not found: {bundle_ref}"
+                )
+            result = validate_contract_bundle(bundle_path)
+            print(
+                "validated "
+                f"{bundle_path.relative_to(REPO_ROOT)} "
+                f"({len(result['contracts'])} contracts)"
+            )
+
+
 def validate_privacy_artifact_catalog(
     *,
     manifest_path: Path,
@@ -466,6 +486,7 @@ def main() -> int:
         read_solution_pack(solution_pack_path)
         print(f"validated {solution_pack_path.relative_to(REPO_ROOT)}")
 
+    validate_solution_pack_contract_bundles()
     validate_contract_bundles()
 
     return 0
