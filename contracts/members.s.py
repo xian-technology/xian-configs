@@ -6,6 +6,7 @@ import currency
 nodes = Variable()
 candidates = Variable()
 votes = Hash(default_value=False)
+vote_records = Hash(default_value=None)
 vote_weights = Hash(default_value=0)
 total_votes = Variable()
 types = Variable()
@@ -78,6 +79,60 @@ DEFAULT_SLASH_DESTINATION = "dao"
 DEFAULT_DUPLICATE_VOTE_SLASH_BPS = 500
 DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS = 1000
 SYSTEM_EVIDENCE_CALLER = "__evidence_penalty_driver__"
+
+ValidatorProposalSubmittedEvent = LogEvent(
+    "ValidatorProposalSubmitted",
+    {
+        "proposal_id": {"type": int, "idx": True},
+        "type_of_vote": {"type": str, "idx": True},
+        "proposer": {"type": str, "idx": True},
+        "status": {"type": str},
+    },
+)
+
+ValidatorProposalVotedEvent = LogEvent(
+    "ValidatorProposalVoted",
+    {
+        "proposal_id": {"type": int, "idx": True},
+        "voter": {"type": str, "idx": True},
+        "vote": {"type": str, "idx": True},
+        "weight": {"type": int},
+        "yes_votes": {"type": int},
+        "no_votes": {"type": int},
+        "yes_weight": {"type": int},
+        "no_weight": {"type": int},
+    },
+)
+
+ValidatorProposalApprovedEvent = LogEvent(
+    "ValidatorProposalApproved",
+    {
+        "proposal_id": {"type": int, "idx": True},
+        "type_of_vote": {"type": str, "idx": True},
+        "approver": {"type": str, "idx": True},
+        "status": {"type": str},
+    },
+)
+
+ValidatorProposalRejectedEvent = LogEvent(
+    "ValidatorProposalRejected",
+    {
+        "proposal_id": {"type": int, "idx": True},
+        "type_of_vote": {"type": str, "idx": True},
+        "rejector": {"type": str, "idx": True},
+        "status": {"type": str},
+    },
+)
+
+ValidatorProposalExpiredEvent = LogEvent(
+    "ValidatorProposalExpired",
+    {
+        "proposal_id": {"type": int, "idx": True},
+        "type_of_vote": {"type": str, "idx": True},
+        "expirer": {"type": str, "idx": True},
+        "status": {"type": str},
+    },
+)
 
 
 @construct
@@ -919,6 +974,30 @@ def snapshot_vote_weights(proposal_id: int):
     return total_weight
 
 
+def active_member_snapshot():
+    snapshot = []
+    for node in active_nodes_list():
+        snapshot.append(node)
+    return snapshot
+
+
+def store_vote_record(proposal_id: int, voter: str, vote: str, weight: int):
+    vote_records[proposal_id, voter] = vote
+    current_vote = votes[proposal_id]
+    ValidatorProposalVotedEvent(
+        {
+            "proposal_id": proposal_id,
+            "voter": voter,
+            "vote": vote,
+            "weight": weight,
+            "yes_votes": current_vote["yes"],
+            "no_votes": current_vote["no"],
+            "yes_weight": current_vote["yes_weight"],
+            "no_weight": current_vote["no_weight"],
+        }
+    )
+
+
 def update_profile_fields(
     account: str,
     reward_key: str = None,
@@ -1462,6 +1541,7 @@ def propose_vote(type_of_vote: str, arg: Any):
 
     total_weight_snapshot = snapshot_vote_weights(proposal_id)
     proposer_weight = vote_weights[proposal_id, ctx.caller]
+    member_snapshot = active_member_snapshot()
 
     votes[proposal_id] = {
         "yes": 1,
@@ -1475,12 +1555,22 @@ def propose_vote(type_of_vote: str, arg: Any):
         "status": STATUS_PENDING,
         "created_at": now,
         "expiry": now + datetime.timedelta(days=PROPOSAL_EXPIRY_DAYS),
-        "member_count_snapshot": len(active_nodes_list()),
+        "member_snapshot": member_snapshot,
+        "member_count_snapshot": len(member_snapshot),
         "total_weight_snapshot": total_weight_snapshot,
-        "required_yes_votes": required_yes_votes(len(active_nodes_list())),
+        "required_yes_votes": required_yes_votes(len(member_snapshot)),
         "required_yes_weight": required_yes_weight(total_weight_snapshot),
     }
 
+    ValidatorProposalSubmittedEvent(
+        {
+            "proposal_id": proposal_id,
+            "type_of_vote": type_of_vote,
+            "proposer": ctx.caller,
+            "status": STATUS_PENDING,
+        }
+    )
+    store_vote_record(proposal_id, ctx.caller, "yes", proposer_weight)
     decide_finalize(proposal_id)
     return votes[proposal_id]
 
@@ -1507,6 +1597,7 @@ def vote(proposal_id: int, vote: str):
     current_vote["voters"].append(ctx.caller)
     votes[proposal_id] = current_vote
 
+    store_vote_record(proposal_id, ctx.caller, vote, voter_weight)
     decide_finalize(proposal_id)
     return current_vote
 
@@ -1521,6 +1612,14 @@ def expire_vote(proposal_id: int):
     current_vote["finalized"] = True
     current_vote["status"] = STATUS_EXPIRED
     votes[proposal_id] = current_vote
+    ValidatorProposalExpiredEvent(
+        {
+            "proposal_id": proposal_id,
+            "type_of_vote": current_vote["type"],
+            "expirer": ctx.caller,
+            "status": STATUS_EXPIRED,
+        }
+    )
     return current_vote
 
 
@@ -1539,6 +1638,14 @@ def decide_finalize(proposal_id: int):
         current_vote["finalized"] = True
         current_vote["status"] = STATUS_REJECTED
         votes[proposal_id] = current_vote
+        ValidatorProposalRejectedEvent(
+            {
+                "proposal_id": proposal_id,
+                "type_of_vote": current_vote["type"],
+                "rejector": ctx.caller,
+                "status": STATUS_REJECTED,
+            }
+        )
 
 
 def finalize_vote(proposal_id: int):
@@ -1607,7 +1714,63 @@ def finalize_vote(proposal_id: int):
     current_vote["finalized"] = True
     current_vote["status"] = STATUS_APPROVED
     votes[proposal_id] = current_vote
+    ValidatorProposalApprovedEvent(
+        {
+            "proposal_id": proposal_id,
+            "type_of_vote": current_vote["type"],
+            "approver": ctx.caller,
+            "status": STATUS_APPROVED,
+        }
+    )
     return current_vote
+
+
+@export
+def get_vote(proposal_id: int):
+    assert votes[proposal_id], "Invalid proposal."
+    return votes[proposal_id]
+
+
+@export
+def get_vote_record(proposal_id: int, voter: str):
+    assert votes[proposal_id], "Invalid proposal."
+    return {
+        "proposal_id": proposal_id,
+        "voter": voter,
+        "vote": vote_records[proposal_id, voter],
+        "weight": vote_weights[proposal_id, voter],
+    }
+
+
+@export
+def get_vote_weight(proposal_id: int, voter: str):
+    assert votes[proposal_id], "Invalid proposal."
+    return vote_weights[proposal_id, voter]
+
+
+@export
+def get_vote_voter_snapshot(proposal_id: int):
+    assert votes[proposal_id], "Invalid proposal."
+    snapshot = votes[proposal_id].get("member_snapshot")
+    if snapshot is None:
+        return []
+    return snapshot
+
+
+@export
+def get_vote_records(proposal_id: int):
+    assert votes[proposal_id], "Invalid proposal."
+    records = []
+    for voter in get_vote_voter_snapshot(proposal_id):
+        records.append(
+            {
+                "proposal_id": proposal_id,
+                "voter": voter,
+                "vote": vote_records[proposal_id, voter],
+                "weight": vote_weights[proposal_id, voter],
+            }
+        )
+    return records
 
 
 @export
