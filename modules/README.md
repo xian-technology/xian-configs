@@ -9,6 +9,19 @@ They are lower-level than solutions:
 - a solution composes templates, modules, services, examples, and docs into a
   full application or operator workflow
 
+```mermaid
+flowchart LR
+  Module["Module"] --> Assets["Contract assets"]
+  Module --> Recipes["Install recipes"]
+  Module --> Manifest["module.json"]
+  CLI["xian-cli module commands"] --> Manifest
+  Manifest --> Network["Running Xian network"]
+  Solution["Solution"] --> Module
+  Solution --> Templates["Network templates"]
+  Solution --> Services["Optional services"]
+  Solution --> Examples["Examples and docs"]
+```
+
 Current modules:
 
 - `dex/`: canonical Xian AMM contracts
@@ -16,4 +29,3 @@ Current modules:
 
 Use `xian module list`, `xian module show <name>`, and
 `xian module validate <name>` from `xian-cli`.
-

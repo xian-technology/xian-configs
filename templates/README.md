@@ -28,3 +28,13 @@
 - Choose the matching template again when joining a network into a local
   profile.
 - Treat these files as reusable defaults, not as live network state.
+
+```mermaid
+flowchart LR
+  Template["Template JSON"] --> Create["xian network create"]
+  Template --> Join["xian network join"]
+  Create --> Profile["Local node profile"]
+  Join --> Profile
+  Manifest["Network manifest"] --> Join
+  Profile --> Stack["xian-stack runtime"]
+```

@@ -24,3 +24,14 @@
     commitment for `shielded_wallet_history`
   - `privacy_submission_policy`: operator-facing policy for relayer auth and
     hidden-sender submission posture
+
+```mermaid
+flowchart LR
+  Manifest["Network manifest"] --> Genesis["Rendered genesis"]
+  Bundle["Preset contract bundle"] --> Genesis
+  Manifest --> Seeds["Seed nodes and snapshots"]
+  Manifest --> Runtime["Runtime image provenance"]
+  Manifest --> Privacy["Privacy-facing metadata"]
+  CLI["xian-cli"] --> Manifest
+  Deploy["xian-deploy and xian-stack"] --> Manifest
+```

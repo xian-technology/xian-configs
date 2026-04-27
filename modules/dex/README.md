@@ -6,6 +6,16 @@ automation, frontend, and integration-test flows.
 Active development lives in `xian-dex`. This directory is a pinned catalog
 snapshot for repeatable installs.
 
+```mermaid
+flowchart LR
+  DexRepo["xian-dex contract bundle"] --> Snapshot["Pinned module snapshot"]
+  Snapshot --> Recipes["core, local-demo, production recipes"]
+  Recipes --> CLI["xian-cli module install dex"]
+  CLI --> Network["Target Xian network"]
+  Network --> Frontend["DEX frontend"]
+  Network --> Automation["DEX automation"]
+```
+
 Recipes:
 
 - `core`: deploy `con_pairs`, `con_dex`, and `con_dex_helper`
@@ -15,4 +25,3 @@ Recipes:
 
 Use the DEX demo solution when you want the complete local frontend and
 automation workflow.
-

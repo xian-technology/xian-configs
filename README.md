@@ -49,11 +49,12 @@ other repos consume; it does not run nodes or build images itself.
 
 The usual flow is:
 
-```text
-xian-configs asset
-  -> xian-cli resolves and validates it
-  -> xian-stack or xian-deploy performs the runtime work
-  -> xian-py / xian-js apps interact with the resulting chain
+```mermaid
+flowchart LR
+  Asset["xian-configs asset"] --> CLI["xian-cli resolves and validates"]
+  CLI --> Runtime["xian-stack or xian-deploy performs runtime work"]
+  Runtime --> Chain["Configured Xian chain"]
+  Chain --> Apps["xian-py and xian-js apps"]
 ```
 
 For example, a local DEX demo starts from committed config data:
