@@ -34,6 +34,44 @@ uv run --project ../xian-cli    python ./scripts/validate-manifests.py
 uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py
 ```
 
+## Asset Model
+
+`xian-configs` is intentionally data-heavy. It describes the assets that
+other repos consume; it does not run nodes or build images itself.
+
+| Asset type | Location | What it answers | Primary consumers |
+| --- | --- | --- | --- |
+| Network manifest | `networks/<name>/manifest.json` | Which chain exists, what its chain ID is, where genesis / snapshots / seed nodes / runtime settings come from | `xian-cli`, `xian-deploy`, `xian-stack` |
+| Genesis and built-ins | `contracts/`, network assets | Which contracts are part of canonical committed chain state | `xian-abci`, `xian-cli` |
+| Network template | `templates/*.json` | How to create a new local or operator-managed profile with sensible defaults | `xian-cli network create/join` |
+| Module | `modules/<name>/module.json` plus bundles | Which reusable protocol package can be installed onto an existing network | `xian-cli module ...`, localnet harnesses |
+| Solution | `solutions/<name>/solution.json` | Which templates, modules, services, docs, and examples form a complete app starter | `xian-cli solution ...`, docs |
+
+The usual flow is:
+
+```text
+xian-configs asset
+  -> xian-cli resolves and validates it
+  -> xian-stack or xian-deploy performs the runtime work
+  -> xian-py / xian-js apps interact with the resulting chain
+```
+
+For example, a local DEX demo starts from committed config data:
+
+```bash
+uv run --project ../xian-cli xian module show dex
+uv run --project ../xian-cli xian module validate dex
+uv run --project ../xian-cli xian solution starter dex-demo --flow local
+```
+
+When adding a new module or solution, keep the source of truth close to the
+owning repo:
+
+- the owning product repo keeps canonical source and package tests
+- this repo keeps the installable, hash-pinned manifest used by networks
+- `xian-cli` validates and installs that manifest
+- `xian-docs-web` documents the user-facing workflow
+
 ## Principles
 
 - **Network-first.** This repo describes networks and committed chain
