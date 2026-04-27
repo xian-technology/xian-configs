@@ -1,18 +1,24 @@
 # xian-configs
 
 `xian-configs` is the canonical repository for Xian network definitions and
-chain assets. Use it when you need to define a network, version a genesis or
-manifest, or keep committed contract assets outside the runtime repos.
+committed chain assets. It hosts network manifests, genesis files, reusable
+starter templates, installable on-chain modules, and complete reference
+solutions. Other repos (`xian-cli`, `xian-stack`, `xian-deploy`) read from
+this repo as the source of truth for "which networks exist" and "what
+contracts are part of them".
 
-## Common Workflows
+This repo is network-first and asset-centric. It does not contain node
+runtime behavior, image build definitions, or operator command surfaces.
+
+## Quick Start
 
 Use this repo to:
 
 - define or review a network manifest under `networks/`
-- keep committed contract assets under `contracts/`
+- maintain committed contract assets under `contracts/`
 - maintain reusable starter templates under `templates/`
 - publish reusable installable modules under `modules/`
-- publish complete application/operator solutions under `solutions/`
+- publish complete application / operator solutions under `solutions/`
 
 Inspect the canonical templates from `xian-cli`:
 
@@ -21,44 +27,65 @@ uv run --project ../xian-cli xian network template list
 uv run --project ../xian-cli xian network template show single-node-indexed
 ```
 
-The main consumer repos are:
+Validate manifests and contract assets locally:
 
-- `xian-cli` for network creation and local operator commands
-- `xian-stack` for runtime images and local Compose-based operation
-- `xian-deploy` for remote host deployment
+```bash
+uv run --project ../xian-cli    python ./scripts/validate-manifests.py
+uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py
+```
 
 ## Principles
 
-- Keep this repo network-first. It should describe networks and committed chain
-  assets, not node runtime behavior.
-- Keep reusable templates separate from live network manifests.
-- Keep contract assets here when they are part of a canonical network, a
-  reusable module, or a solution, not when they are general runtime code.
-- Prefer explicit, committed manifests over implicit setup logic.
+- **Network-first.** This repo describes networks and committed chain
+  assets, not node runtime behavior or image builds.
+- **Templates are not live networks.** Reusable starter templates and
+  installable modules live separate from the manifests of real networks.
+- **Committed assets only when canonical.** Contract assets belong here when
+  they are part of a canonical network, a reusable module, or a solution.
+  General runtime code lives in the runtime repos.
+- **Explicit manifests, no implicit setup.** Anything a network depends on
+  should be visible in a committed manifest, not inferred at deploy time.
 
 ## Key Directories
 
-- `networks/`: network-first manifests and colocated genesis files
-- `contracts/`: canonical contract manifests and source assets used by those
-  networks
-- `templates/`: reusable starter templates for creating purposeful Xian
-  networks
-- `modules/`: reusable on-chain protocol or contract modules
-- `solutions/`: complete app/operator patterns that compose templates, modules,
-  services, examples, and docs
-- `scripts/`: validation helpers for manifests, modules, and solutions
-- `docs/`: repo-local architecture and backlog notes
+- `networks/` — manifests and genesis files for canonical networks
+  (`devnet/`, `testnet/`, `local/`).
+- `contracts/` — canonical contract manifests and source assets referenced by
+  the networks above.
+- `templates/` — reusable starter templates for creating purposeful Xian
+  networks (`single-node-dev`, `single-node-indexed`, `consortium-3`,
+  `consortium-5`, `embedded-backend`, plus token-factory contract
+  templates).
+- `modules/` — reusable on-chain protocol or contract modules
+  (`dex/`, `stable-protocol/`).
+- `solutions/` — complete app / operator patterns that compose templates,
+  modules, services, examples, and docs (`credits-ledger`, `dex-demo`,
+  `registry-approval`, `workflow-backend`).
+- `scripts/` — validation helpers for manifests, modules, and solutions.
+- `docs/` — repo-local architecture, backlog, and packaging notes.
+
+## Main Consumers
+
+- `xian-cli` — network creation, joining, module install, and solution
+  starter flows
+- `xian-stack` — runtime images and local Compose-based operation
+- `xian-deploy` — remote host deployment
 
 ## Validation
 
 ```bash
-uv run --project ../xian-cli python ./scripts/validate-manifests.py
+uv run --project ../xian-cli    python ./scripts/validate-manifests.py
 uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py
 ```
 
+The first script validates manifest schemas and cross-references. The second
+runs the contracting linter against committed contract assets.
+
 ## Related Docs
 
-- [AGENTS.md](AGENTS.md)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/BACKLOG.md](docs/BACKLOG.md)
-- [docs/README.md](docs/README.md)
+- [AGENTS.md](AGENTS.md) — repo-specific guidance for AI agents and contributors
+- [docs/README.md](docs/README.md) — index of internal docs
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — major components and dependency direction
+- [docs/BACKLOG.md](docs/BACKLOG.md) — open work and follow-ups
+- [docs/PRIVACY_NETWORK_PACKAGING.md](docs/PRIVACY_NETWORK_PACKAGING.md) — packaging conventions for privacy-enabled networks
+- [docs/VALIDATOR_DELEGATION.md](docs/VALIDATOR_DELEGATION.md) — validator delegation manifest model
