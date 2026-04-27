@@ -17,11 +17,9 @@
   `xian-cli`
 - `contracts/`: canonical contract manifests and source files used to build
   deterministic preset genesis state
-- `legacy/`: archival extracted content only; do not add new active assets here
 
 ## Workflow
-- Prefer network-first structure for canonical data. Treat `legacy/` as archive
-  material, not an active input path.
+- Prefer network-first structure for canonical data.
 - Prefer explicit, descriptive filenames. Avoid embedding operator workflows in
   this repo.
 - Keep GitHub references under `xian-technology`.

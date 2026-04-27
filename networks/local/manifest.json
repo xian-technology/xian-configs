@@ -5,7 +5,6 @@
   "mode": "join",
   "runtime_backend": "xian-stack",
   "node_image_mode": "local_build",
-  "shielded_relayer": null,
   "shielded_relayers": [
     {
       "id": "local-stack",

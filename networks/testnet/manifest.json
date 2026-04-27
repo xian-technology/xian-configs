@@ -5,7 +5,6 @@
   "mode": "join",
   "runtime_backend": "xian-stack",
   "node_image_mode": "registry",
-  "shielded_relayer": null,
   "shielded_relayers": [],
   "privacy_artifact_catalog": {
     "path": "./privacy/artifacts.json",
