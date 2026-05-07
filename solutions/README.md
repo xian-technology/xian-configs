@@ -20,6 +20,7 @@ Current solutions:
 - `registry-approval/`
 - `workflow-backend/`
 - `dex-demo/`
+- `x402-exact/`
 
 Use `xian solution list`, `xian solution show <name>`, and
 `xian solution starter <name>` from `xian-cli`.
