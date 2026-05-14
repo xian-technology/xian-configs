@@ -3,7 +3,6 @@
   "name": "devnet",
   "chain_id": "xian-devnet-1",
   "mode": "join",
-  "runtime_backend": "xian-stack",
   "node_image_mode": "local_build",
   "shielded_relayers": [],
   "privacy_artifact_catalog": {
@@ -28,6 +27,5 @@
   "snapshot_url": null,
   "seed_nodes": [],
   "block_policy_mode": "idle_interval",
-  "block_policy_interval": "5s",
-  "tracer_mode": "native_instruction_v1"
+  "block_policy_interval": "5s"
 }

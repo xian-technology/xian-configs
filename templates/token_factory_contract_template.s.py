@@ -83,7 +83,6 @@ def create_token(
 
     submission.submit_contract(
         name=token_contract,
-        code=None,
         deployment_artifacts=build_token_deployment_artifacts(token_contract),
         owner=None,
         constructor_args={

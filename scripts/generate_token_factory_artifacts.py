@@ -6,7 +6,7 @@ import difflib
 import sys
 from pathlib import Path
 
-from contracting.compilation.artifacts import build_contract_artifacts
+from contracting.artifacts import build_contract_artifacts
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOKEN_FACTORY_PATH = REPO_ROOT / "contracts" / "token_factory.s.py"
