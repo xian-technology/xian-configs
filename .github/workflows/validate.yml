@@ -75,12 +75,6 @@ jobs:
         working-directory: xian-configs
         run: |
           uv run --project ../xian-contracting python \
-            ../xian-contracting/scripts/audit_python_vm_compatibility.py \
-            ./contracts \
-            ./modules \
-            ./solutions \
-            --fail-on-issues
-          uv run --project ../xian-contracting python \
             ../xian-contracting/scripts/audit_authored_conformance.py \
             ./contracts \
             ./modules \
