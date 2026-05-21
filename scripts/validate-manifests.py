@@ -8,7 +8,7 @@ from pathlib import Path
 from generate_token_factory_artifacts import verify_token_factory_artifacts
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ACTIVE_PRESET_NAMES = ("local", "devnet", "testnet")
+ACTIVE_BUNDLE_NAMES = ("local", "devnet", "testnet")
 REQUIRED_MASTERNODES_CONSTRUCTOR_ARGS = (
     "genesis_nodes",
     "genesis_registration_fee",
@@ -66,16 +66,16 @@ except ModuleNotFoundError as exc:
 def validate_contract_bundles() -> None:
     contracts_dir = REPO_ROOT / "contracts"
     bundle_paths = sorted(contracts_dir.glob("contracts_*.json"))
-    expected_names = {f"contracts_{name}.json" for name in ACTIVE_PRESET_NAMES}
+    expected_names = {f"contracts_{name}.json" for name in ACTIVE_BUNDLE_NAMES}
     actual_names = {path.name for path in bundle_paths}
     if actual_names != expected_names:
         raise SystemExit(
-            "active contract bundles must match preset set exactly; "
+            "active contract bundles must match genesis bundle set exactly; "
             f"expected {sorted(expected_names)}, found {sorted(actual_names)}"
         )
 
-    for preset_name in ACTIVE_PRESET_NAMES:
-        bundle_path = contracts_dir / f"contracts_{preset_name}.json"
+    for bundle_name in ACTIVE_BUNDLE_NAMES:
+        bundle_path = contracts_dir / f"contracts_{bundle_name}.json"
         payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         contracts = payload.get("contracts")
         if not isinstance(contracts, list) or not contracts:
@@ -120,7 +120,7 @@ def validate_contract_bundles() -> None:
                 f"masternodes genesis_nodes must be a non-empty list in {bundle_path}"
             )
 
-        if preset_name == "testnet":
+        if bundle_name == "testnet":
             if len(genesis_nodes) != CANONICAL_TESTNET_NODE_COUNT:
                 raise SystemExit(
                     "canonical testnet must define exactly "
@@ -481,19 +481,15 @@ def validate_network_manifests() -> None:
                 f"{manifest_path}"
             )
         if manifest["name"] == "testnet":
-            if manifest["genesis_preset"] != "testnet":
+            genesis = manifest["genesis"]
+            if genesis["kind"] != "bundle" or genesis["bundle"] != "testnet":
                 raise SystemExit(
-                    "canonical testnet must derive genesis from the testnet preset "
+                    "canonical testnet must derive genesis from the testnet bundle "
                     f"in {manifest_path}"
                 )
-            if manifest["genesis_time"] is None:
+            if genesis["genesis_time"] is None:
                 raise SystemExit(
                     "canonical testnet must pin genesis_time in "
-                    f"{manifest_path}"
-                )
-            if manifest["genesis_source"] is not None:
-                raise SystemExit(
-                    "canonical testnet must not use a checked-in genesis_source in "
                     f"{manifest_path}"
                 )
             if manifest["node_image_mode"] != "registry":

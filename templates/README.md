@@ -6,10 +6,9 @@
 
 ## Contents
 - one JSON file per template
-- network defaults such as runtime backend, block policy, and tracer mode
+- network defaults such as block policy and tracer mode
 - node execution defaults such as speculative parallel execution
-- bootstrap profile defaults such as service-node, dashboard, and monitoring
-  behavior
+- bootstrap profile defaults such as BDS, dashboard, and monitoring behavior
 - operator intent metadata such as `operator_profile` and
   `monitoring_profile`
 - creation conveniences such as a default bootstrap validator name
@@ -21,7 +20,9 @@
 - `operator_profile` expresses the intended operator posture for the template:
   local development, indexed development, shared network, or embedded backend.
 - `monitoring_profile` expresses how the template expects monitoring to work:
-  `none`, `local_stack`, or `service_node`.
+  `none`, `local_stack`, or `bds`.
+- `services` contains the sidecars that the generated node profile should
+  enable. `services.bds.enabled` controls the Blockchain Data Service.
 
 ## Typical Use
 - Choose a template when creating a fresh local or operator-managed network.

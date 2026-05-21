@@ -2,7 +2,6 @@
   "schema_version": 1,
   "name": "local",
   "chain_id": "xian-local-1",
-  "mode": "join",
   "node_image_mode": "local_build",
   "shielded_relayers": [
     {
@@ -36,10 +35,16 @@
     "hidden_sender_submission_mode": "relayer_optional",
     "operator_notice": "The bundled local relayer is for development convenience and should not be treated as a privacy trust boundary."
   },
-  "genesis_preset": "local",
-  "genesis_time": "2026-03-30T00:00:00.000000Z",
+  "genesis": {
+    "kind": "bundle",
+    "bundle": "local",
+    "genesis_time": "2026-03-30T00:00:00.000000Z"
+  },
   "snapshot_url": null,
-  "seed_nodes": [],
+  "p2p": {
+    "seeds": [],
+    "persistent_peers": []
+  },
   "block_policy_mode": "on_demand",
   "block_policy_interval": "0s"
 }
