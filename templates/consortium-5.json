@@ -30,6 +30,11 @@
       "enabled": true
     }
   },
+  "advanced": {
+    "metrics": {
+      "host": "0.0.0.0"
+    }
+  },
   "pruning_enabled": false,
   "blocks_to_keep": 100000
 }

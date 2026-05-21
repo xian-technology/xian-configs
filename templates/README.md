@@ -23,6 +23,9 @@
   `none`, `local_stack`, or `bds`.
 - `services` contains the sidecars that the generated node profile should
   enable. `services.bds.enabled` controls the Blockchain Data Service.
+- `advanced` contains template-specific low-level runtime overrides. The
+  starter templates bind application metrics to `0.0.0.0` inside containers;
+  stack and deploy host-publish settings still control public exposure.
 
 ## Typical Use
 - Choose a template when creating a fresh local or operator-managed network.
