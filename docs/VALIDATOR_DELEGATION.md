@@ -94,7 +94,7 @@ Implementation note for the current contract:
 
 - until a dedicated epoch driver exists, selection epochs are derived from
   `block_num // rebalance_interval`
-- active preset bundles under `xian-configs/contracts/contracts_<preset>.json`
+- active genesis bundles under `xian-configs/contracts/contracts_<bundle>.json`
   should pin every shipped validator policy field explicitly at genesis
 - public `rebalance()` is limited to once per derived epoch
 - governance-triggered policy changes and hybrid approvals may force a

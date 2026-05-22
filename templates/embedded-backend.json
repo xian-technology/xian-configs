@@ -6,17 +6,30 @@
   "block_policy_mode": "on_demand",
   "block_policy_interval": "0s",
   "parallel_execution_enabled": false,
-  "parallel_execution_workers": 0,
+  "parallel_execution_workers": 4,
   "parallel_execution_min_transactions": 8,
   "operator_profile": "embedded_backend",
-  "monitoring_profile": "service_node",
+  "monitoring_profile": "bds",
   "bootstrap_node_name": "validator-1",
   "additional_validator_names": [],
-  "service_node": true,
-  "dashboard_enabled": false,
-  "monitoring_enabled": true,
-  "dashboard_host": "127.0.0.1",
-  "dashboard_port": 8080,
+  "services": {
+    "bds": {
+      "enabled": true
+    },
+    "dashboard": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    "monitoring": {
+      "enabled": true
+    }
+  },
+  "advanced": {
+    "metrics": {
+      "host": "0.0.0.0"
+    }
+  },
   "pruning_enabled": false,
   "blocks_to_keep": 100000
 }

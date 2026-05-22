@@ -80,7 +80,7 @@
           ]
         },
         {
-          "title": "Deploy validators and the service node",
+          "title": "Deploy validators and the BDS node",
           "commands": [
             "ansible-playbook playbooks/bootstrap.yml",
             "ansible-playbook playbooks/push-home.yml",
@@ -88,7 +88,7 @@
             "ansible-playbook playbooks/health.yml"
           ],
           "notes": [
-            "Run these commands from the xian-deploy checkout with your inventory for the validator and service-node hosts.",
+            "Run these commands from the xian-deploy checkout with your inventory for the validator and BDS-node hosts.",
             "Use the health playbook to validate BDS, monitoring, and state-sync readiness after deployment."
           ]
         },

@@ -82,7 +82,7 @@
           ],
           "notes": [
             "Run these commands from the xian-deploy checkout with your prepared inventory.",
-            "Use a service node for indexed reads, DEX web inspection, and automation services."
+            "Use a BDS node for indexed reads, DEX web inspection, and automation services."
           ]
         },
         {

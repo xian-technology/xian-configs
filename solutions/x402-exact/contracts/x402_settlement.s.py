@@ -36,7 +36,7 @@ def require_token(token_contract: str):
 
 
 def field_hash(value: str):
-    return hashlib.sha3("s:" + value)
+    return hashlib.sha3_text("s:" + value)
 
 
 def construct_payment_msg(
@@ -90,6 +90,7 @@ def settle(
     deadline: str,
     payment_signature: str,
     permit_signature: str,
+    permit_nonce: int,
     x402_version: int = 2,
     scheme: str = "exact",
     network: str = "",
@@ -132,6 +133,7 @@ def settle(
         spender=ctx.this,
         value=amount,
         deadline=str(deadline_time),
+        nonce=permit_nonce,
         signature=permit_signature,
     )
 

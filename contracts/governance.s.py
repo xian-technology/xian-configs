@@ -290,10 +290,6 @@ def record_vote(proposal_id: int, support: bool):
 
 
 def maybe_finalize(proposal_id: int):
-    yes_votes = proposal_vote_counts[proposal_id, "yes"]
-    no_votes = proposal_vote_counts[proposal_id, "no"]
-    member_total = proposals[proposal_id, "member_count_snapshot"]
-    required_votes = proposals[proposal_id, "required_yes_votes"]
     yes_weight = proposal_vote_counts[proposal_id, "yes_weight"]
     no_weight = proposal_vote_counts[proposal_id, "no_weight"]
     total_weight = proposals[proposal_id, "total_weight_snapshot"]
@@ -305,10 +301,6 @@ def maybe_finalize(proposal_id: int):
 
     remaining_weight = total_weight - yes_weight - no_weight
     if yes_weight + remaining_weight < required_weight:
-        proposals[proposal_id, "status"] = STATUS_REJECTED
-        return
-
-    if no_votes > member_total - required_votes:
         proposals[proposal_id, "status"] = STATUS_REJECTED
 
 

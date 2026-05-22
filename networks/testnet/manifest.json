@@ -2,7 +2,6 @@
   "schema_version": 1,
   "name": "testnet",
   "chain_id": "xian-testnet-1",
-  "mode": "join",
   "node_image_mode": "registry",
   "shielded_relayers": [],
   "privacy_artifact_catalog": {
@@ -24,10 +23,16 @@
   },
   "node_integrated_image": "ghcr.io/xian-technology/xian-node@sha256:f9e086af72697a8e70e1810e369f5c18aa989b152165fad3f997ce4f418c8714",
   "node_split_image": "ghcr.io/xian-technology/xian-node-split@sha256:701bfe878109646e3b0db090f05e4dd73815435a10aa6fa9a308140cd4609d2e",
-  "genesis_preset": "testnet",
-  "genesis_time": "2026-03-30T00:00:00.000000Z",
+  "genesis": {
+    "kind": "bundle",
+    "bundle": "testnet",
+    "genesis_time": "2026-03-30T00:00:00.000000Z"
+  },
   "snapshot_url": null,
-  "seed_nodes": [],
+  "p2p": {
+    "seeds": [],
+    "persistent_peers": []
+  },
   "block_policy_mode": "idle_interval",
   "block_policy_interval": "5s",
   "node_release_manifest": {

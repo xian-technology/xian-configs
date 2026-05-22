@@ -612,7 +612,7 @@ def build_token_deployment_artifacts(token_contract: str):
         "hashes": {
             "input_source_sha256": XSC001_TOKEN_INPUT_SOURCE_SHA256,
             "source_sha256": XSC001_TOKEN_SOURCE_SHA256,
-            "vm_ir_sha256": hashlib.sha256(vm_ir_json),
+            "vm_ir_sha256": hashlib.sha256_text(vm_ir_json),
         },
     }
 
