@@ -90,6 +90,7 @@ def settle(
     deadline: str,
     payment_signature: str,
     permit_signature: str,
+    permit_nonce: int,
     x402_version: int = 2,
     scheme: str = "exact",
     network: str = "",
@@ -132,6 +133,7 @@ def settle(
         spender=ctx.this,
         value=amount,
         deadline=str(deadline_time),
+        nonce=permit_nonce,
         signature=permit_signature,
     )
 

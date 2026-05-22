@@ -2,6 +2,8 @@ balances = Hash(default_value=0)
 approvals = Hash(default_value=0)
 metadata = Hash()
 
+GOVERNANCE_CONTRACT = "governance"
+
 TransferEvent = LogEvent(
     "Transfer",
     {
@@ -44,7 +46,44 @@ def seed(vk: str):
 def change_metadata(key: str, value: Any):
     assert ctx.caller == metadata["operator"], "Only operator can set metadata."
     assert key != "total_supply", "total_supply is managed by the contract."
+    assert key != "operator", "operator is managed by governance."
+    assert (
+        key != "permit_authorizer"
+    ), "permit_authorizer is managed by governance."
     metadata[key] = value
+
+
+def require_governance():
+    assert (
+        ctx.caller == GOVERNANCE_CONTRACT
+    ), "Only governance can change sensitive currency settings."
+
+
+def require_name(name: str, label: str):
+    assert isinstance(name, str) and name != "", label + " must be non-empty."
+    return name
+
+
+def require_contract_name(name: str, label: str):
+    name = require_name(name, label)
+    assert importlib.exists(name), label + " contract does not exist."
+    return name
+
+
+@export
+def set_operator(new_operator: str):
+    require_governance()
+    metadata["operator"] = require_name(new_operator, "new_operator")
+    return metadata["operator"]
+
+
+@export
+def set_permit_authorizer(new_authorizer: str):
+    require_governance()
+    metadata["permit_authorizer"] = require_contract_name(
+        new_authorizer, "new_authorizer"
+    )
+    return metadata["permit_authorizer"]
 
 
 @export
