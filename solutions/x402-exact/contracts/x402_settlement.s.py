@@ -36,7 +36,7 @@ def require_token(token_contract: str):
 
 
 def field_hash(value: str):
-    return hashlib.sha3("s:" + value)
+    return hashlib.sha3_text("s:" + value)
 
 
 def construct_payment_msg(
