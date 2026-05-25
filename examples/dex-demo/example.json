@@ -1,0 +1,57 @@
+{
+  "schema": "xian.example.v1",
+  "schema_version": 1,
+  "name": "dex-demo",
+  "display_name": "DEX Demo Example",
+  "description": "Local DEX operator pattern that installs the DEX contract pack and prepares endpoints for the web app and automation tests.",
+  "use_case": "Run the Xian DEX under known contract names so wallets, the SnakX web app, automation services, and integration tests can rely on the same AMM surface.",
+  "recommended_local_template": "single-node-indexed",
+  "docs_path": "/examples/dex-demo",
+  "example_dir": "xian-dex",
+  "services": [
+    "dex-automation"
+  ],
+  "contract_paths": [],
+  "contract_bundle_paths": [
+    "contract-packs/dex/contract-bundle.json"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local DEX Demo",
+      "template": "single-node-indexed",
+      "summary": "Run a local indexed node, install the DEX contract pack with the local-demo recipe, and seed a demo liquid pair.",
+      "network_name": "dex-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "make localnet-init",
+            "make localnet-up"
+          ],
+          "notes": [
+            "Run these commands from the xian-stack checkout.",
+            "The base localnet starts without the DEX. Install the contract pack next."
+          ]
+        },
+        {
+          "title": "Install the DEX contract pack",
+          "commands": [
+            "uv run xian contract-pack install dex --recipe local-demo --stack-dir ../xian-stack"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "This deploys the pinned DEX contract pack bundle and seeds the demo pool."
+          ]
+        }
+      ]
+    }
+  ],
+  "contract_packs": [
+    {
+      "name": "dex",
+      "recipe": "local-demo"
+    }
+  ]
+}

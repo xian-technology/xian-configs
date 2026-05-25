@@ -51,10 +51,10 @@ REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS = (
 try:
     from xian_cli.contract_bundles import validate_contract_bundle
     from xian_cli.models import (
-        read_module,
+        read_contract_pack,
+        read_example,
         read_network_manifest,
         read_network_template,
-        read_solution,
     )
 except ModuleNotFoundError as exc:
     raise SystemExit(
@@ -293,26 +293,32 @@ def _catalog_ref_path(manifest_path: Path, collection_name: str, ref: str) -> Pa
     return (manifest_path.parent / raw_ref).resolve()
 
 
-def validate_modules() -> None:
-    module_paths = sorted((REPO_ROOT / "modules").glob("*/module.json"))
-    if not module_paths:
-        raise SystemExit("no canonical modules found under modules/")
+def validate_contract_packs() -> None:
+    pack_paths = sorted(
+        (REPO_ROOT / "contract-packs").glob("*/contract-pack.json")
+    )
+    if not pack_paths:
+        raise SystemExit("no canonical contract packs found under contract-packs/")
 
-    for module_path in module_paths:
-        module = read_module(module_path)
-        for contract_ref in module["contract_paths"]:
+    for pack_path in pack_paths:
+        pack = read_contract_pack(pack_path)
+        for contract_ref in pack["contract_paths"]:
             contract_path = _catalog_ref_path(
-                module_path, "modules", contract_ref
+                pack_path, "contract-packs", contract_ref
             )
             if not contract_path.exists():
-                raise SystemExit(f"module contract not found: {contract_ref}")
+                raise SystemExit(
+                    f"contract pack contract not found: {contract_ref}"
+                )
 
-        for bundle_ref in module["contract_bundle_paths"]:
+        for bundle_ref in pack["contract_bundle_paths"]:
             bundle_path = _catalog_ref_path(
-                module_path, "modules", bundle_ref
+                pack_path, "contract-packs", bundle_ref
             )
             if not bundle_path.exists():
-                raise SystemExit(f"module bundle not found: {bundle_ref}")
+                raise SystemExit(
+                    f"contract pack bundle not found: {bundle_ref}"
+                )
             result = validate_contract_bundle(bundle_path)
             print(
                 "validated "
@@ -320,39 +326,74 @@ def validate_modules() -> None:
                 f"({len(result['contracts'])} contracts)"
             )
 
-        print(f"validated {module_path.relative_to(REPO_ROOT)}")
+        print(f"validated {pack_path.relative_to(REPO_ROOT)}")
 
 
-def validate_solutions() -> None:
-    solution_paths = sorted((REPO_ROOT / "solutions").glob("*/solution.json"))
-    if not solution_paths:
-        raise SystemExit("no canonical solutions found under solutions/")
+def validate_examples() -> None:
+    example_paths = sorted((REPO_ROOT / "examples").glob("*/example.json"))
+    if not example_paths:
+        raise SystemExit("no canonical examples found under examples/")
 
-    for solution_path in solution_paths:
-        solution = read_solution(solution_path)
-        for module_ref in solution["modules"]:
-            module_name = module_ref["name"]
-            module_path = REPO_ROOT / "modules" / module_name / "module.json"
-            if not module_path.exists():
+    template_names = {
+        path.stem for path in (REPO_ROOT / "templates").glob("*.json")
+    }
+    contract_pack_recipes: dict[str, set[str]] = {}
+    for pack_path in (REPO_ROOT / "contract-packs").glob("*/contract-pack.json"):
+        pack = read_contract_pack(pack_path)
+        contract_pack_recipes[pack["name"]] = {
+            recipe["name"] for recipe in pack["recipes"]
+        }
+
+    for example_path in example_paths:
+        example = read_example(example_path)
+        if example["recommended_local_template"] not in template_names:
+            raise SystemExit(
+                "example references missing recommended template: "
+                f"{example['name']} -> {example['recommended_local_template']}"
+            )
+        for flow in example["starter_flows"]:
+            if flow["template"] not in template_names:
                 raise SystemExit(
-                    "solution references missing module: "
-                    f"{solution['name']} -> {module_name}"
+                    "example starter flow references missing template: "
+                    f"{example['name']}:{flow['name']} -> {flow['template']}"
+                )
+        for pack_ref in example["contract_packs"]:
+            pack_name = pack_ref["name"]
+            pack_path = (
+                REPO_ROOT
+                / "contract-packs"
+                / pack_name
+                / "contract-pack.json"
+            )
+            if not pack_path.exists():
+                raise SystemExit(
+                    "example references missing contract pack: "
+                    f"{example['name']} -> {pack_name}"
+                )
+            pack_recipe = pack_ref.get("recipe")
+            if (
+                pack_recipe is not None
+                and pack_recipe not in contract_pack_recipes.get(pack_name, set())
+            ):
+                raise SystemExit(
+                    "example references missing contract pack recipe: "
+                    f"{example['name']} -> {pack_name}:{pack_recipe}"
                 )
 
-        for contract_ref in solution["contract_paths"]:
+        for contract_ref in example["contract_paths"]:
             contract_path = _catalog_ref_path(
-                solution_path, "solutions", contract_ref
+                example_path, "examples", contract_ref
             )
             if not contract_path.exists():
-                raise SystemExit(f"solution contract not found: {contract_ref}")
+                raise SystemExit(f"example contract not found: {contract_ref}")
 
-        for bundle_ref in solution["contract_bundle_paths"]:
+        for bundle_ref in example["contract_bundle_paths"]:
             bundle_path = _catalog_ref_path(
-                solution_path, "solutions", bundle_ref
+                example_path, "examples", bundle_ref
             )
             if not bundle_path.exists():
-                raise SystemExit(f"solution bundle not found: {bundle_ref}")
-        print(f"validated {solution_path.relative_to(REPO_ROOT)}")
+                raise SystemExit(f"example bundle not found: {bundle_ref}")
+        print(f"validated {example_path.relative_to(REPO_ROOT)}")
 
 
 def validate_privacy_artifact_catalog(
@@ -526,8 +567,8 @@ def main() -> int:
         read_network_template(template_path)
         print(f"validated {template_path.relative_to(REPO_ROOT)}")
 
-    validate_modules()
-    validate_solutions()
+    validate_contract_packs()
+    validate_examples()
     validate_contract_bundles()
 
     return 0

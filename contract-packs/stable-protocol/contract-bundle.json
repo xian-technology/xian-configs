@@ -4,11 +4,11 @@
   "name": "xian-stable-protocol",
   "display_name": "Xian Stable Protocol",
   "version": "0.1.0",
-  "description": "Pinned stable-protocol module bundle for validation and operator bootstrap flows.",
+  "description": "Pinned stable-protocol contract pack bundle for validation and operator bootstrap flows.",
   "source": {
     "repo": "https://github.com/xian-technology/xian-stable-protocol",
     "commit": "a97f59872d0eae3e297a19a243340c0a574e56f4",
-    "snapshot_policy": "Vendored into xian-configs for reproducible module metadata and validation."
+    "snapshot_policy": "Vendored into xian-configs for reproducible contract pack metadata and validation."
   },
   "contracts": [
     {

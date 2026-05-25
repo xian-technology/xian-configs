@@ -18,7 +18,7 @@
 - `xian-cli` consumes these files for `network template ...`,
   `network create --template ...`, and `network join --template ...`.
 - `operator_profile` expresses the intended operator posture for the template:
-  local development, indexed development, shared network, or embedded backend.
+  local development, indexed development, or shared network.
 - `monitoring_profile` expresses how the template expects monitoring to work:
   `none`, `local_stack`, or `bds`.
 - `services` contains the sidecars that the generated node profile should

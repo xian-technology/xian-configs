@@ -77,8 +77,8 @@ jobs:
           uv run --project ../xian-contracting python \
             ../xian-contracting/scripts/audit_authored_conformance.py \
             ./contracts \
-            ./modules \
-            ./solutions \
+            ./contract-packs \
+            ./examples \
             --fail-on-issues
           uv run --project ../xian-cli python ./scripts/validate-manifests.py
-          uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py
+          uv run --project ../xian-linter python ./scripts/validate-example-contracts.py

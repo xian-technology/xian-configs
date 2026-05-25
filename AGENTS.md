@@ -8,15 +8,15 @@
 
 ## Scope
 - `xian-configs` owns chain-specific configuration assets for the Xian stack.
-- Keep canonical preset manifests, contract manifests, seed metadata, and
-  future snapshot metadata here instead of in `xian-abci`.
+- Keep canonical network manifests, contract manifests, seed metadata, and
+  future snapshot metadata here instead of in runtime repos.
 - Do not add runtime logic, CLI behavior, or Docker orchestration to this repo.
 
 ## Project Layout
-- `networks/<name>/manifest.json`: canonical preset manifest consumed by
+- `networks/<name>/manifest.json`: canonical network manifest consumed by
   `xian-cli`
 - `contracts/`: canonical contract manifests and source files used to build
-  deterministic preset genesis state
+  deterministic genesis state
 
 ## Workflow
 - Prefer network-first structure for canonical data.

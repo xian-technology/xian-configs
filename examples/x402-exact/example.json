@@ -1,19 +1,17 @@
 {
-  "schema": "xian.solution.v1",
+  "schema": "xian.example.v1",
   "schema_version": 1,
   "name": "x402-exact",
-  "display_name": "x402 Exact Payment Solution",
+  "display_name": "x402 Exact Payment Example",
   "description": "HTTP 402 pay-per-request starter using native Xian token settlement.",
   "use_case": "Expose paid APIs or agent tools that charge a fixed Xian token amount per request while keeping payment verification and settlement in a reusable facilitator path.",
   "recommended_local_template": "single-node-indexed",
-  "recommended_remote_template": "embedded-backend",
-  "docs_path": "/solutions/x402-exact",
+  "docs_path": "/examples/x402-exact",
   "example_dir": "xian-py/examples/x402_exact",
   "contract_paths": [
-    "solutions/x402-exact/contracts/x402_settlement.s.py"
+    "examples/x402-exact/contracts/x402_settlement.s.py"
   ],
   "contract_bundle_paths": [],
-  "modules": [],
   "services": [
     "x402-facilitator",
     "x402-paid-api"
@@ -70,5 +68,6 @@
         }
       ]
     }
-  ]
+  ],
+  "contract_packs": []
 }

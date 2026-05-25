@@ -6,12 +6,12 @@ try:
 except ImportError as exc:  # pragma: no cover - operator guidance path
     raise SystemExit(
         "xian_linter is required; run this script via "
-        "`uv run --project ../xian-linter python ./scripts/validate-solution-contracts.py`"
+        "`uv run --project ../xian-linter python ./scripts/validate-example-contracts.py`"
     ) from exc
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACTS_DIR = ROOT / "solutions"
+CONTRACTS_DIR = ROOT / "examples"
 
 
 def iter_contracts() -> list[Path]:
@@ -30,9 +30,9 @@ def main() -> int:
         for error in errors:
             print(f"  - {error}")
     if failures:
-        print(f"\n{failures} solution contract file(s) failed linting.")
+        print(f"\n{failures} example contract file(s) failed linting.")
         return 1
-    print(f"\nValidated {len(iter_contracts())} solution contract file(s).")
+    print(f"\nValidated {len(iter_contracts())} example contract file(s).")
     return 0
 
 
