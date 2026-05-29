@@ -1,4 +1,9 @@
 S = Hash()
+CONTROL_CONTRACT = "masternodes"
+
+
+def require_control_contract():
+    assert ctx.caller == CONTROL_CONTRACT, "Only masternodes can change rewards."
 
 @construct
 def seed(initial_split: list = [0.30, 0.01, 0.01, 0.68]):
@@ -10,6 +15,7 @@ def current_value():
 
 @export
 def set_value(new_value: list):
+    require_control_contract()
     assert len(new_value) == 4, 'New value must be a list of 4 elements'
     assert sum(new_value) == 1, 'Sum of new value must be 1'
     for item in new_value:

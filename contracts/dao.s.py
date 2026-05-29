@@ -1,5 +1,13 @@
+CONTROL_CONTRACT = "masternodes"
+
+
+def require_control_contract():
+    assert ctx.caller == CONTROL_CONTRACT, "Only masternodes can transfer DAO funds."
+
+
 @export
 def transfer_from_dao(args: dict):
+    require_control_contract()
     contract_name = args.get('contract_name')
     amount = args.get('amount')
     to = args.get('to')

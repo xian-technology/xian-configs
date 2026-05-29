@@ -1,4 +1,9 @@
 S = Hash()
+CONTROL_CONTRACT = "masternodes"
+
+
+def require_control_contract():
+    assert ctx.caller == CONTROL_CONTRACT, "Only masternodes can change chi cost."
 
 @construct
 def seed(initial_rate: int=100):
@@ -10,5 +15,6 @@ def current_value():
 
 @export
 def set_value(new_value: int):
+    require_control_contract()
     assert new_value > 0, 'New value must be greater than 0'
     S['value'] = new_value
