@@ -20,6 +20,7 @@ Current examples:
 - `registry-approval/`
 - `workflow-backend/`
 - `dex-demo/`
+- `nft-marketplace/`
 - `x402-exact/`
 
 Use `xian example list`, `xian example show <name>`, and

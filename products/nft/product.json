@@ -1,0 +1,43 @@
+{
+  "schema": "xian.product.v1",
+  "schema_version": 1,
+  "name": "nft",
+  "display_name": "Xian NFT",
+  "category": "on_chain_product",
+  "maturity": "candidate",
+  "description": "XSC-0005 NFT product composed of checker/reference collection contracts and the PixelSnek marketplace.",
+  "source_owner_repo": "xian-nft",
+  "docs_path": "/products/nft",
+  "contract_packs": [
+    {
+      "name": "nft",
+      "recipe": "reference-marketplace",
+      "required": true
+    }
+  ],
+  "examples": [
+    "nft-marketplace"
+  ],
+  "apps": [
+    {
+      "name": "pixelsnek",
+      "kind": "web",
+      "repo": "xian-nft",
+      "path": ".",
+      "description": "XSC-0005 NFT marketplace."
+    }
+  ],
+  "services": [],
+  "lifecycle": {
+    "install_phase": "post_genesis",
+    "included_in_genesis": false,
+    "shipped_with_node_image": false,
+    "installer": {
+      "kind": "contract-pack",
+      "contract_pack": "nft",
+      "recipe": "reference-marketplace",
+      "repo": "xian-nft",
+      "command": "uv run --group deploy python scripts/bootstrap_nft.py"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "xian.example.v1",
+  "schema_version": 1,
+  "name": "nft-marketplace",
+  "display_name": "NFT Marketplace Example",
+  "description": "Local NFT marketplace pattern that installs the NFT contract pack and runs PixelSnek against an indexed node.",
+  "use_case": "Run the xian-nft product under known XSC-0005 contract names so wallets and the PixelSnek web app can discover, mint, list, and trade NFTs.",
+  "recommended_local_template": "single-node-indexed",
+  "docs_path": "/examples/nft-marketplace",
+  "example_dir": "xian-nft",
+  "services": [],
+  "contract_paths": [],
+  "contract_bundle_paths": [
+    "contract-packs/nft/contract-bundle.json"
+  ],
+  "starter_flows": [
+    {
+      "name": "local",
+      "display_name": "Local NFT Marketplace",
+      "template": "single-node-indexed",
+      "summary": "Run a local indexed node, install the NFT contract pack, and start PixelSnek.",
+      "network_name": "nft-local",
+      "node_name": "validator-1",
+      "steps": [
+        {
+          "title": "Create and start the local indexed node",
+          "commands": [
+            "make localnet-init",
+            "make localnet-up"
+          ],
+          "notes": [
+            "Run these commands from the xian-stack checkout.",
+            "The base localnet starts without NFT product contracts. Install the contract pack next."
+          ]
+        },
+        {
+          "title": "Install the NFT contract pack",
+          "commands": [
+            "uv run xian contract-pack install nft --recipe reference-marketplace --repo-dir ../xian-nft"
+          ],
+          "notes": [
+            "Run this command from the xian-cli checkout.",
+            "This deploys the pinned XSC-0005 checker and reference collection through the xian-nft bootstrap script."
+          ]
+        },
+        {
+          "title": "Start PixelSnek",
+          "commands": [
+            "npm install",
+            "npm run dev"
+          ],
+          "notes": [
+            "Run these commands from the xian-nft checkout.",
+            "Point PixelSnek at the local node RPC if you are not using the default endpoint."
+          ]
+        }
+      ]
+    }
+  ],
+  "contract_packs": [
+    {
+      "name": "nft",
+      "recipe": "reference-marketplace"
+    }
+  ]
+}

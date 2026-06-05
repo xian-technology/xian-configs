@@ -55,6 +55,7 @@ try:
         read_example,
         read_network_manifest,
         read_network_template,
+        read_product,
     )
 except ModuleNotFoundError as exc:
     raise SystemExit(
@@ -396,6 +397,66 @@ def validate_examples() -> None:
         print(f"validated {example_path.relative_to(REPO_ROOT)}")
 
 
+def validate_products() -> None:
+    product_paths = sorted((REPO_ROOT / "products").glob("*/product.json"))
+    if not product_paths:
+        raise SystemExit("no canonical products found under products/")
+
+    contract_pack_recipes: dict[str, set[str]] = {}
+    for pack_path in (REPO_ROOT / "contract-packs").glob("*/contract-pack.json"):
+        pack = read_contract_pack(pack_path)
+        contract_pack_recipes[pack["name"]] = {
+            recipe["name"] for recipe in pack["recipes"]
+        }
+
+    example_names = {
+        path.parent.name for path in (REPO_ROOT / "examples").glob("*/example.json")
+    }
+
+    for product_path in product_paths:
+        product = read_product(product_path)
+        lifecycle = product["lifecycle"]
+        if lifecycle["install_phase"] != "post_genesis":
+            raise SystemExit(
+                "product must declare post-genesis installation: "
+                f"{product['name']}"
+            )
+        if lifecycle["included_in_genesis"]:
+            raise SystemExit(
+                f"product must not be included in genesis: {product['name']}"
+            )
+        if lifecycle["shipped_with_node_image"]:
+            raise SystemExit(
+                f"product must not be shipped with the node image: {product['name']}"
+            )
+
+        for pack_ref in product["contract_packs"]:
+            pack_name = pack_ref["name"]
+            if pack_name not in contract_pack_recipes:
+                raise SystemExit(
+                    "product references missing contract pack: "
+                    f"{product['name']} -> {pack_name}"
+                )
+            pack_recipe = pack_ref.get("recipe")
+            if (
+                pack_recipe is not None
+                and pack_recipe not in contract_pack_recipes[pack_name]
+            ):
+                raise SystemExit(
+                    "product references missing contract pack recipe: "
+                    f"{product['name']} -> {pack_name}:{pack_recipe}"
+                )
+
+        for example_name in product["examples"]:
+            if example_name not in example_names:
+                raise SystemExit(
+                    "product references missing example: "
+                    f"{product['name']} -> {example_name}"
+                )
+
+        print(f"validated {product_path.relative_to(REPO_ROOT)}")
+
+
 def validate_privacy_artifact_catalog(
     *,
     manifest_path: Path,
@@ -569,6 +630,7 @@ def main() -> int:
 
     validate_contract_packs()
     validate_examples()
+    validate_products()
     validate_contract_bundles()
 
     return 0

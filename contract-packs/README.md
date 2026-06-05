@@ -25,6 +25,7 @@ flowchart LR
 Current contract packs:
 
 - `dex/`: canonical Xian AMM contracts
+- `nft/`: XSC-0005 checker and reference NFT collection contracts
 - `stable-protocol/`: governance-owned stable-asset protocol contracts
 
 Use `xian contract-pack list`, `xian contract-pack show <name>`, and

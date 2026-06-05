@@ -1,0 +1,33 @@
+{
+  "schema": "xian.product.v1",
+  "schema_version": 1,
+  "name": "stable-protocol",
+  "display_name": "Xian Stable Protocol",
+  "category": "on_chain_product",
+  "maturity": "candidate",
+  "description": "Overcollateralized stable-vault protocol composed of stable token, oracle, savings, vault, and peg-stability contracts.",
+  "source_owner_repo": "xian-stable-protocol",
+  "docs_path": "/products/stable-protocol",
+  "contract_packs": [
+    {
+      "name": "stable-protocol",
+      "recipe": "core",
+      "required": true
+    }
+  ],
+  "examples": [],
+  "apps": [],
+  "services": [],
+  "lifecycle": {
+    "install_phase": "post_genesis",
+    "included_in_genesis": false,
+    "shipped_with_node_image": false,
+    "installer": {
+      "kind": "contract-pack",
+      "contract_pack": "stable-protocol",
+      "recipe": "core",
+      "repo": "xian-stable-protocol",
+      "command": "uv run python scripts/bootstrap_protocol.py"
+    }
+  }
+}
