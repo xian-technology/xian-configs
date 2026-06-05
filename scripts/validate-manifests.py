@@ -402,11 +402,11 @@ def validate_products() -> None:
     if not product_paths:
         raise SystemExit("no canonical products found under products/")
 
-    contract_pack_recipes: dict[str, set[str]] = {}
+    contract_pack_recipes: dict[str, dict[str, dict]] = {}
     for pack_path in (REPO_ROOT / "contract-packs").glob("*/contract-pack.json"):
         pack = read_contract_pack(pack_path)
         contract_pack_recipes[pack["name"]] = {
-            recipe["name"] for recipe in pack["recipes"]
+            recipe["name"]: recipe["install"] for recipe in pack["recipes"]
         }
 
     example_names = {
@@ -430,14 +430,21 @@ def validate_products() -> None:
                 f"product must not be shipped with the node image: {product['name']}"
             )
 
+        declared_pack_recipes: dict[str, str | None] = {}
         for pack_ref in product["contract_packs"]:
             pack_name = pack_ref["name"]
+            if pack_name in declared_pack_recipes:
+                raise SystemExit(
+                    "product references duplicate contract pack: "
+                    f"{product['name']} -> {pack_name}"
+                )
             if pack_name not in contract_pack_recipes:
                 raise SystemExit(
                     "product references missing contract pack: "
                     f"{product['name']} -> {pack_name}"
                 )
             pack_recipe = pack_ref.get("recipe")
+            declared_pack_recipes[pack_name] = pack_recipe
             if (
                 pack_recipe is not None
                 and pack_recipe not in contract_pack_recipes[pack_name]
@@ -446,6 +453,62 @@ def validate_products() -> None:
                     "product references missing contract pack recipe: "
                     f"{product['name']} -> {pack_name}:{pack_recipe}"
                 )
+
+        installer = lifecycle.get("installer")
+        if not isinstance(installer, dict):
+            raise SystemExit(
+                f"product must declare a lifecycle installer: {product['name']}"
+            )
+        if installer.get("kind") != "contract-pack":
+            raise SystemExit(
+                "product lifecycle installer.kind must be contract-pack: "
+                f"{product['name']}"
+            )
+        installer_pack = installer.get("contract_pack")
+        if not isinstance(installer_pack, str) or not installer_pack:
+            raise SystemExit(
+                "product lifecycle installer must declare contract_pack: "
+                f"{product['name']}"
+            )
+        if installer_pack not in declared_pack_recipes:
+            raise SystemExit(
+                "product lifecycle installer references undeclared contract pack: "
+                f"{product['name']} -> {installer_pack}"
+            )
+        installer_recipe = installer.get("recipe")
+        declared_recipe = declared_pack_recipes[installer_pack]
+        if installer_recipe != declared_recipe:
+            raise SystemExit(
+                "product lifecycle installer recipe must match product contract "
+                f"pack reference: {product['name']} -> {installer_pack}"
+            )
+        if not isinstance(installer_recipe, str) or not installer_recipe:
+            raise SystemExit(
+                "product lifecycle installer must declare recipe: "
+                f"{product['name']} -> {installer_pack}"
+            )
+        pack_install = contract_pack_recipes[installer_pack][installer_recipe]
+        if pack_install.get("kind") != "external":
+            raise SystemExit(
+                "product contract pack installer must be external: "
+                f"{product['name']} -> {installer_pack}:{installer_recipe}"
+            )
+        installer_repo = installer.get("repo")
+        if installer_repo != product["source_owner_repo"]:
+            raise SystemExit(
+                "product lifecycle installer repo must match source_owner_repo: "
+                f"{product['name']} -> {installer_repo}"
+            )
+        if pack_install.get("repo") != installer_repo:
+            raise SystemExit(
+                "product lifecycle installer repo must match contract pack "
+                f"recipe repo: {product['name']} -> {installer_pack}"
+            )
+        if installer.get("command") != pack_install.get("command"):
+            raise SystemExit(
+                "product lifecycle installer command must match contract pack "
+                f"recipe command: {product['name']} -> {installer_pack}"
+            )
 
         for example_name in product["examples"]:
             if example_name not in example_names:

@@ -3,7 +3,7 @@
   "schema_version": 1,
   "name": "nft",
   "display_name": "NFT Contract Pack",
-  "category": "product",
+  "category": "protocol",
   "maturity": "candidate",
   "description": "XSC-0005 checker and reference NFT collection contracts for the xian-nft product and PixelSnek marketplace.",
   "source_owner_repo": "xian-nft",

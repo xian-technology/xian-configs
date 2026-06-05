@@ -56,8 +56,10 @@ The usual flow is:
 ```mermaid
 flowchart LR
   Asset["xian-configs asset"] --> CLI["xian-cli resolves and validates"]
-  CLI --> Runtime["xian-stack or xian-deploy performs runtime work"]
+  CLI --> Runtime["xian-stack or xian-deploy performs core runtime work"]
+  CLI --> ProductRepo["Product repo installers perform product work"]
   Runtime --> Chain["Configured Xian chain"]
+  ProductRepo --> Chain
   Chain --> Apps["xian-py and xian-js apps"]
 ```
 
@@ -75,7 +77,7 @@ close to the owning repo:
 
 - the owning product repo keeps canonical source and product-level tests
 - `products/<name>/product.json` records the product boundary and post-genesis lifecycle
-- this repo keeps the installable, hash-pinned manifest used by networks
+- this repo keeps the installable, hash-pinned manifest used by post-genesis installers
 - `xian-cli` validates and installs that manifest
 - `xian-docs-web` documents the user-facing workflow
 

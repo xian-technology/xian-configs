@@ -44,7 +44,8 @@
       "kind": "contract-pack",
       "contract_pack": "dex",
       "recipe": "core",
-      "repo": "xian-dex"
+      "repo": "xian-dex",
+      "command": "uv run python scripts/bootstrap_dex.py --recipe core"
     }
   }
 }

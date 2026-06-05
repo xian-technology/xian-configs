@@ -11,7 +11,8 @@ flowchart LR
   DexRepo["xian-dex contract bundle"] --> Snapshot["Pinned contract pack snapshot"]
   Snapshot --> Recipes["core, local-demo, production recipes"]
   Recipes --> CLI["xian-cli contract-pack install dex"]
-  CLI --> Network["Target Xian network"]
+  CLI --> Installer["xian-dex bootstrap_dex.py"]
+  Installer --> Network["Target Xian network"]
   Network --> Frontend["DEX frontend"]
   Network --> Automation["DEX automation"]
 ```

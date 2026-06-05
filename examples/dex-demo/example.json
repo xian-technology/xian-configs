@@ -38,7 +38,7 @@
         {
           "title": "Install the DEX contract pack",
           "commands": [
-            "uv run xian contract-pack install dex --recipe local-demo --stack-dir ../xian-stack"
+            "uv run xian contract-pack install dex --recipe local-demo --repo-dir ../xian-dex"
           ],
           "notes": [
             "Run this command from the xian-cli checkout.",

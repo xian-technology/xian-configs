@@ -25,11 +25,9 @@
       "display_name": "Core DEX Contracts",
       "summary": "Deploy the canonical DEX contracts without demo liquidity.",
       "install": {
-        "kind": "xian-stack.localnet-dex-bootstrap",
-        "deploy_helper": true,
-        "seed_demo_pool": false,
-        "top_up_liquidity": false,
-        "emit_test_swap": false
+        "kind": "external",
+        "repo": "xian-dex",
+        "command": "uv run python scripts/bootstrap_dex.py --recipe core"
       }
     },
     {
@@ -37,11 +35,9 @@
       "display_name": "Local Demo DEX",
       "summary": "Deploy the canonical DEX contracts plus a demo token, LP token, and seeded XIAN/XDT pool.",
       "install": {
-        "kind": "xian-stack.localnet-dex-bootstrap",
-        "deploy_helper": true,
-        "seed_demo_pool": true,
-        "top_up_liquidity": false,
-        "emit_test_swap": false
+        "kind": "external",
+        "repo": "xian-dex",
+        "command": "uv run python scripts/bootstrap_dex.py --recipe local-demo"
       }
     },
     {
@@ -49,11 +45,9 @@
       "display_name": "Production DEX Core",
       "summary": "Deploy the canonical DEX contracts without local-only demo assets.",
       "install": {
-        "kind": "xian-stack.localnet-dex-bootstrap",
-        "deploy_helper": true,
-        "seed_demo_pool": false,
-        "top_up_liquidity": false,
-        "emit_test_swap": false
+        "kind": "external",
+        "repo": "xian-dex",
+        "command": "uv run python scripts/bootstrap_dex.py --recipe production"
       }
     }
   ]

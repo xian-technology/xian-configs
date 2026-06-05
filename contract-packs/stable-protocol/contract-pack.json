@@ -27,7 +27,7 @@
       "install": {
         "kind": "external",
         "repo": "xian-stable-protocol",
-        "command": "uv run python scripts/bootstrap_protocol.py"
+        "command": "uv run --group deploy python scripts/bootstrap_protocol.py"
       }
     }
   ]
