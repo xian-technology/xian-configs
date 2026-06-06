@@ -26,7 +26,24 @@ VkLifecycleChanged = LogEvent(
     },
 )
 
+OwnershipTransferProposed = LogEvent(
+    "OwnershipTransferProposed",
+    {
+        "current_owner": {"type": str, "idx": True},
+        "pending_owner": {"type": str, "idx": True},
+    },
+)
+
+OwnershipTransferred = LogEvent(
+    "OwnershipTransferred",
+    {
+        "previous_owner": {"type": str, "idx": True},
+        "new_owner": {"type": str, "idx": True},
+    },
+)
+
 registry_owner = Variable()
+pending_owner = Variable()
 verifying_keys = Hash()
 vk_count = Variable()
 vk_index = Hash()
@@ -102,6 +119,51 @@ def seed(owner: str = None):
 @export
 def owner():
     return registry_owner.get()
+
+
+@export
+def get_pending_owner():
+    return pending_owner.get()
+
+
+@export
+def transfer_ownership(new_owner: str):
+    # Two-step transfer: the new owner must explicitly accept, so the registry
+    # can be handed to a DAO / multisig / timelock contract without risk of
+    # being stranded on a mistyped or uncontrolled address. The registry owner
+    # is a fully trusted party (it can register a verifying key from a
+    # trapdoored setup), so ownership should live behind governance.
+    require_owner()
+    assert isinstance(new_owner, str) and new_owner != "", (
+        "new_owner must be a non-empty string!"
+    )
+    assert new_owner != registry_owner.get(), (
+        "new_owner must differ from the current owner!"
+    )
+    pending_owner.set(new_owner)
+    OwnershipTransferProposed(
+        {"current_owner": registry_owner.get(), "pending_owner": new_owner}
+    )
+    return new_owner
+
+
+@export
+def cancel_ownership_transfer():
+    require_owner()
+    pending_owner.set(None)
+    return True
+
+
+@export
+def accept_ownership():
+    pending = pending_owner.get()
+    assert pending is not None and pending != "", "No pending ownership transfer!"
+    assert ctx.caller == pending, "Only the pending owner can accept!"
+    previous = registry_owner.get()
+    registry_owner.set(pending)
+    pending_owner.set(None)
+    OwnershipTransferred({"previous_owner": previous, "new_owner": pending})
+    return pending
 
 
 @export
