@@ -13,7 +13,7 @@ TokenCreatedEvent = LogEvent(
 )
 
 # GENERATED TOKEN FACTORY ARTIFACTS START
-# Source of truth: contract-templates/token_factory_xsc001_token_template.s.py. Regenerate via `uv run --project ../xian-cli python ./scripts/generate_token_factory_artifacts.py --write`.
+# Source of truth: contracts/templates/token_factory_xsc001_token_template.s.py. Regenerate via `uv run --project ../xian-cli python ./scripts/generate_token_factory_artifacts.py --write`.
 XSC001_TOKEN_SOURCE = (
     'balances = Hash(default_value=0)\napprovals = Hash(default_value=0)\nmetadata = Hash()\nope'
     "rator = Variable()\nTransferEvent = LogEvent('Transfer', {'from': indexed(str), 'to': ind"

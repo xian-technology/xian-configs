@@ -12,11 +12,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 TOKEN_FACTORY_PATH = REPO_ROOT / "contracts" / "token_factory.s.py"
 TOKEN_TEMPLATE_PATH = (
     REPO_ROOT
-    / "contract-templates"
+    / "contracts"
+    / "templates"
     / "token_factory_xsc001_token_template.s.py"
 )
 CONTRACT_TEMPLATE_PATH = (
-    REPO_ROOT / "contract-templates" / "token_factory_contract_template.s.py"
+    REPO_ROOT
+    / "contracts"
+    / "templates"
+    / "token_factory_contract_template.s.py"
 )
 TOKEN_TEMPLATE_MODULE = "__TEMPLATE__"
 VM_PROFILE = "xian_vm_v1"
@@ -50,7 +54,7 @@ def render_generated_block() -> str:
         GENERATED_START_MARKER,
         (
             "# Source of truth: "
-            "contract-templates/token_factory_xsc001_token_template.s.py. "
+            "contracts/templates/token_factory_xsc001_token_template.s.py. "
             "Regenerate via `uv run --project ../xian-cli python "
             "./scripts/generate_token_factory_artifacts.py --write`."
         ),

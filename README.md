@@ -79,7 +79,7 @@ network created from this repo, but they are not part of this network catalog.
   the networks above.
 - `templates/` — reusable starter templates for creating purposeful Xian
   networks (`single-node-dev`, `single-node-indexed`, `consortium-5`).
-- `contract-templates/` — source templates used to generate reusable contract
+- `contracts/templates/` — source templates used to generate reusable contract
   assets such as token-factory children.
 - `scripts/` — validation helpers for manifests, templates, generated system
   assets, and contract bundles.
