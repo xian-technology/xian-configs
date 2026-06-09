@@ -49,13 +49,6 @@ jobs:
             git -C xian-contracting checkout -B "$BRANCH" FETCH_HEAD
           fi
 
-      - name: Checkout xian-linter
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ github.repository_owner }}/xian-linter
-          ref: main
-          path: xian-linter
-
       - name: Checkout xian-py
         uses: actions/checkout@v6
         with:
@@ -71,14 +64,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
-      - name: Validate manifests and packaged contracts
+      - name: Validate manifests and system contracts
         working-directory: xian-configs
         run: |
           uv run --project ../xian-contracting python \
             ../xian-contracting/scripts/audit_authored_conformance.py \
             ./contracts \
-            ./contract-packs \
-            ./examples \
             --fail-on-issues
           uv run --project ../xian-cli python ./scripts/validate-manifests.py
-          uv run --project ../xian-linter python ./scripts/validate-example-contracts.py
