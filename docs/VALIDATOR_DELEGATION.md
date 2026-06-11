@@ -132,7 +132,7 @@ The `validators` contract remains the source of truth for:
 
 Required state keys:
 
-- `nodes -> list[str]`
+- `active_validators -> list[str]`
 - `candidates -> list[str]`
 - `validator_registry -> list[str]`
 - `statuses[validator] -> str`
@@ -385,7 +385,7 @@ Ranking key:
 
 Selection output:
 
-- top `max_validators` eligible validators become `nodes`
+- top `max_validators` eligible validators become `active_validators`
 - all selected validators receive active power according to `power_mode`
 
 `power_mode` values:
@@ -445,9 +445,9 @@ Governance vote types should eventually include:
 
 ## Invariants
 
-- `nodes` contains no duplicates.
+- `active_validators` contains no duplicates.
 - Every active validator has `status == active`.
-- No jailed validator appears in `nodes`.
+- No jailed validator appears in `active_validators`.
 - `powers[v] == 0` for inactive validators.
 - `self_bond[v] >= 0`.
 - `total_delegated[v] >= 0`.
