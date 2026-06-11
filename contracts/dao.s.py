@@ -1,8 +1,8 @@
-CONTROL_CONTRACT = "masternodes"
+CONTROL_CONTRACT = "validators"
 
 
 def require_control_contract():
-    assert ctx.caller == CONTROL_CONTRACT, "Only masternodes can transfer DAO funds."
+    assert ctx.caller == CONTROL_CONTRACT, "Only validators can transfer DAO funds."
 
 
 @export

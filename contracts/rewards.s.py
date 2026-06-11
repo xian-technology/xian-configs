@@ -1,9 +1,9 @@
 S = Hash()
-CONTROL_CONTRACT = "masternodes"
+CONTROL_CONTRACT = "validators"
 
 
 def require_control_contract():
-    assert ctx.caller == CONTROL_CONTRACT, "Only masternodes can change rewards."
+    assert ctx.caller == CONTROL_CONTRACT, "Only validators can change rewards."
 
 @construct
 def seed(initial_split: list = [0.30, 0.01, 0.01, 0.68]):

@@ -9,7 +9,7 @@ from generate_token_factory_artifacts import verify_token_factory_artifacts
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_BUNDLE_NAMES = ("local", "devnet", "testnet")
-REQUIRED_MASTERNODES_CONSTRUCTOR_ARGS = (
+REQUIRED_VALIDATORS_CONSTRUCTOR_ARGS = (
     "genesis_nodes",
     "genesis_registration_fee",
     "default_node_power",
@@ -80,41 +80,41 @@ def validate_contract_bundles() -> None:
                 f"contract bundle has no contracts array: {bundle_path}"
             )
 
-        members_contract = next(
+        validators_contract = next(
             (
                 contract
                 for contract in contracts
-                if contract.get("submit_as") == "masternodes"
+                if contract.get("name") == "validators"
             ),
             None,
         )
-        if members_contract is None:
+        if validators_contract is None:
             raise SystemExit(
-                f"contract bundle missing masternodes seed data: {bundle_path}"
+                f"contract bundle missing validators seed data: {bundle_path}"
             )
 
-        constructor_args = members_contract.get("constructor_args")
+        constructor_args = validators_contract.get("constructor_args")
         if not isinstance(constructor_args, dict):
             raise SystemExit(
-                "masternodes constructor_args must be an object in "
+                "validators constructor_args must be an object in "
                 f"{bundle_path}"
             )
 
         missing_keys = [
             key
-            for key in REQUIRED_MASTERNODES_CONSTRUCTOR_ARGS
+            for key in REQUIRED_VALIDATORS_CONSTRUCTOR_ARGS
             if key not in constructor_args
         ]
         if missing_keys:
             raise SystemExit(
-                "masternodes constructor_args must pin the full validator "
+                "validators constructor_args must pin the full validator "
                 f"policy surface in {bundle_path}; missing {missing_keys}"
             )
 
         genesis_nodes = constructor_args["genesis_nodes"]
         if not isinstance(genesis_nodes, list) or not genesis_nodes:
             raise SystemExit(
-                f"masternodes genesis_nodes must be a non-empty list in {bundle_path}"
+                f"validators genesis_nodes must be a non-empty list in {bundle_path}"
             )
 
         if bundle_name == "testnet":
@@ -232,10 +232,10 @@ def validate_contract_bundles() -> None:
                     f"full surface in {bundle_path}; missing "
                     f"{missing_governance_keys}"
                 )
-            if governance_args["membership_contract_name"] != "masternodes":
+            if governance_args["membership_contract_name"] != "validators":
                 raise SystemExit(
                     "canonical testnet governance membership_contract_name must "
-                    f"be masternodes in {bundle_path}"
+                    f"be validators in {bundle_path}"
                 )
             if (
                 not isinstance(governance_args["approval_threshold_numerator"], int)

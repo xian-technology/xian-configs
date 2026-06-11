@@ -1,9 +1,9 @@
 S = Hash()
-CONTROL_CONTRACT = "masternodes"
+CONTROL_CONTRACT = "validators"
 
 
 def require_control_contract():
-    assert ctx.caller == CONTROL_CONTRACT, "Only masternodes can change chi cost."
+    assert ctx.caller == CONTROL_CONTRACT, "Only validators can change chi cost."
 
 @construct
 def seed(initial_rate: int=100):

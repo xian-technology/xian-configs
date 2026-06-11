@@ -3,7 +3,7 @@ import rewards
 import chi_cost
 import currency
 
-nodes = Variable()
+active_validators = Variable()
 candidates = Variable()
 votes = Hash(default_value=False)
 vote_records = Hash(default_value=None)
@@ -34,7 +34,7 @@ last_slashed_at = Hash(default_value=None)
 processed_evidence = Hash(default_value=False)
 validator_registry = Variable()
 
-validator_power = Hash(default_value=0)
+powers = Hash(default_value=0)
 requested_power = Hash(default_value=0)
 reward_keys = Hash(default_value=None)
 monikers = Hash(default_value="")
@@ -175,7 +175,7 @@ def seed(
     assert min_bond_margin_bps >= 0, "min_bond_margin_bps < 0"
     assert slash_destination != "", "slash_destination empty"
 
-    nodes.set([])
+    active_validators.set([])
     candidates.set([])
     pending_unbond_counter.set(0)
     last_rebalance_epoch.set(None)
@@ -223,10 +223,10 @@ def seed(
             genesis_powers,
             default_node_power,
         )
-        validator_power[node] = requested_power[node]
+        powers[node] = requested_power[node]
         reward_keys[node] = resolve_reward_key(node, genesis_reward_keys)
 
-    nodes.set(active_nodes)
+    active_validators.set(active_nodes)
 
 
 def resolve_requested_power(
@@ -286,7 +286,7 @@ def normalize_jail_reason(reason: str = None):
 
 
 def active_nodes_list():
-    current_nodes = nodes.get()
+    current_nodes = active_validators.get()
     if current_nodes is None:
         return []
     return current_nodes
@@ -345,7 +345,7 @@ def effective_requested_power(account: str):
 
 
 def effective_active_power(account: str):
-    power = validator_power[account]
+    power = powers[account]
     if power is None:
         if account in active_nodes_list():
             return effective_requested_power(account)
@@ -878,7 +878,7 @@ def rebalance_validator_set(force: bool = False):
             eligible_at_epoch[account] = selection_epoch
             reward_keys[account] = effective_reward_key(account)
             requested_power[account] = effective_requested_power(account)
-            validator_power[account] = selected_validator_power(account)
+            powers[account] = selected_validator_power(account)
         else:
             if statuses[account] == STATUS_ACTIVE:
                 statuses[account] = STATUS_APPROVED
@@ -889,9 +889,9 @@ def rebalance_validator_set(force: bool = False):
                 next_candidates.append(account)
 
             if account in previous_active or statuses[account] == STATUS_APPROVED:
-                validator_power[account] = 0
+                powers[account] = 0
 
-    nodes.set(selected_accounts)
+    active_validators.set(selected_accounts)
     candidates.set(next_candidates)
     last_rebalance_epoch.set(selection_epoch)
 
@@ -1037,7 +1037,7 @@ def activate_member(account: str):
     current_nodes = active_nodes_list()
     if account not in current_nodes:
         current_nodes.append(account)
-        nodes.set(current_nodes)
+        active_validators.set(current_nodes)
 
     current_candidates = candidate_list()
     if account in current_candidates:
@@ -1054,7 +1054,7 @@ def activate_member(account: str):
 
     power = effective_requested_power(account)
     requested_power[account] = power
-    validator_power[account] = power
+    powers[account] = power
     reward_keys[account] = effective_reward_key(account)
 
 
@@ -1066,11 +1066,11 @@ def refund_validator_bond(account: str):
 
 
 def deactivate_member(account: str, status: str, refund_bond: bool):
-    nodes.set(without_item(active_nodes_list(), account))
+    active_validators.set(without_item(active_nodes_list(), account))
     pending_leave[account] = False
     statuses[account] = status
     left_at[account] = now
-    validator_power[account] = 0
+    powers[account] = 0
 
     if refund_bond:
         refund_validator_bond(account)
@@ -1083,7 +1083,7 @@ def exit_validator(account: str, status: str, refund_bond: bool):
         pending_leave[account] = False
         statuses[account] = status
         left_at[account] = now
-        validator_power[account] = 0
+        powers[account] = 0
         if refund_bond:
             refund_validator_bond(account)
 
@@ -1099,10 +1099,10 @@ def jail_validator(account: str, reason: str = None):
     jailed[account] = True
     jail_reasons[account] = normalize_jail_reason(reason)
     pending_leave[account] = False
-    validator_power[account] = 0
+    powers[account] = 0
 
     if account in active_nodes_list():
-        nodes.set(without_item(active_nodes_list(), account))
+        active_validators.set(without_item(active_nodes_list(), account))
         statuses[account] = STATUS_APPROVED
         left_at[account] = now
         ensure_candidate(account)
@@ -1693,7 +1693,7 @@ def finalize_vote(proposal_id: int):
         power = current_vote["arg"]["power"]
         requested_power[member] = power
         if effective_selection_mode() == "manual":
-            validator_power[member] = power
+            powers[member] = power
         elif effective_power_mode() == "requested":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "update_policy":

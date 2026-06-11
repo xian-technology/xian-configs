@@ -3,21 +3,21 @@
 ## Purpose
 
 This note defines the target validator policy model for Xian and the rollout
-path from the current manual `masternodes` governance flow to configurable
+path from the current manual `validators` governance flow to configurable
 validator selection with on-chain delegation and reward splitting.
 
 The canonical contract source remains
-`xian-configs/contracts/members.s.py`, submitted into genesis as
-`masternodes`.
+`xian-configs/contracts/validators.s.py`, deployed into genesis as
+`validators`.
 
 ## Current State
 
-- Validator membership is governed manually through `masternodes`.
-- The active validator set is the on-chain list `masternodes.nodes`.
-- ABCI reads `masternodes.nodes` and optional
-  `masternodes.validator_power:<vk>` to build CometBFT validator updates.
+- Validator membership is governed manually through `validators`.
+- The active validator set is the on-chain list `validators.active_validators`.
+- ABCI reads `validators.active_validators` and optional
+  `validators.powers:<vk>` to build CometBFT validator updates.
 - Validator rewards are distributed off-chain in ABCI and currently pay the
-  validator reward key directly, optionally weighted by `validator_power`.
+  validator reward key directly, optionally weighted by `powers`.
 - Generic staking contracts exist in `xian-contracts`, but they are not the
   consensus validator registry and they do not model validator delegation.
 
@@ -25,8 +25,8 @@ The canonical contract source remains
 
 - Keep `currency` as the staking token without embedding validator logic into
   the token contract.
-- Preserve backwards compatibility with the current `masternodes.nodes` and
-  `masternodes.validator_power` outputs consumed by ABCI.
+- Use `validators.active_validators` and `validators.powers` as the canonical
+  validator-set outputs consumed by ABCI.
 - Add first-class validator delegation and reward splitting between operator
   and delegators.
 - Make validator selection policy configurable per network.
@@ -110,12 +110,12 @@ Implementation note for the current ABCI runtime:
 - its result is included in the block fingerprint so an otherwise empty block
   still changes app hash when validator state changes
 - `finalize_block` also consumes CometBFT `misbehavior` entries and routes them
-  through an internal `masternodes.apply_evidence_penalty(...)` call before
+  through an internal `validators.apply_evidence_penalty(...)` call before
   rewards and validator updates are computed
 
 ## Validator State Model
 
-The `masternodes` contract remains the source of truth for:
+The `validators` contract remains the source of truth for:
 
 - active validators
 - candidate validators
@@ -136,7 +136,7 @@ Required state keys:
 - `candidates -> list[str]`
 - `validator_registry -> list[str]`
 - `statuses[validator] -> str`
-- `validator_power[validator] -> int`
+- `powers[validator] -> int`
 - `requested_power[validator] -> int`
 - `reward_keys[validator] -> str`
 - `commission_bps[validator] -> int`
@@ -267,7 +267,7 @@ Current runtime flow:
    address against the persistent validator registry, not only the current
    active set.
 3. ABCI computes a deterministic `evidence_id` and calls
-   `masternodes.apply_evidence_penalty(...)` as an internal system sender.
+   `validators.apply_evidence_penalty(...)` as an internal system sender.
 4. The contract deduplicates repeated evidence with `processed_evidence`.
 5. The configured slash and jail policy is applied. Evidence slashing uses the
    delivered `evidence_height`, so only pending unbonds created after that
@@ -335,7 +335,7 @@ new unbond ids without relying on an event stream.
 ## Reward Distribution
 
 ABCI remains responsible for applying balance deltas, but the split is derived
-from `masternodes` state.
+from `validators` state.
 
 For each validator reward allotment `R`:
 
@@ -401,15 +401,15 @@ The recommended rollout mode is `equal`.
 
 ## ABCI Integration
 
-Compatibility requirements:
+ABCI integration requirements:
 
-- `masternodes.nodes` remains the active validator list
-- `masternodes.validator_power:<vk>` remains the effective CometBFT power source
-- `masternodes.reward_keys:<vk>` remains the operator reward key source
+- `validators.active_validators` is the active validator list
+- `validators.powers:<vk>` is the effective CometBFT power source
+- `validators.reward_keys:<vk>` is the operator reward key source
 
 ABCI reward handling should evolve as follows:
 
-- keep reading the active validator list from `masternodes.nodes`
+- keep reading the active validator list from `validators.active_validators`
 - for each validator reward allotment, read:
   - `commission_bps`
   - `self_bond`
@@ -448,7 +448,7 @@ Governance vote types should eventually include:
 - `nodes` contains no duplicates.
 - Every active validator has `status == active`.
 - No jailed validator appears in `nodes`.
-- `validator_power[v] == 0` for inactive validators.
+- `powers[v] == 0` for inactive validators.
 - `self_bond[v] >= 0`.
 - `total_delegated[v] >= 0`.
 - `total_bond[v] = self_bond[v] + total_delegated[v]`.
@@ -491,7 +491,7 @@ Governance vote types should eventually include:
 
 ## Implementation Notes
 
-- Canonical contract source: `xian-configs/contracts/members.s.py`
+- Canonical contract source: `xian-configs/contracts/validators.s.py`
 - Canonical network bundle: `xian-configs/contracts/contracts_*.json`
 - ABCI reward integration: `xian-abci/src/xian/rewards.py`
 - ABCI validator updates: `xian-abci/src/xian/validators.py`

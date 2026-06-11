@@ -20,14 +20,14 @@
     },
     {
       "name": "chi_cost",
-      "owner": "masternodes",
+      "owner": "validators",
       "constructor_args": {
         "initial_rate": 20
       }
     },
     {
       "name": "rewards",
-      "owner": "masternodes",
+      "owner": "validators",
       "constructor_args": null
     },
     {
@@ -39,12 +39,11 @@
     },
     {
       "name": "dao",
-      "owner": "masternodes",
+      "owner": "validators",
       "constructor_args": null
     },
     {
-      "name": "members",
-      "submit_as": "masternodes",
+      "name": "validators",
       "owner": null,
       "constructor_args": {
         "genesis_nodes": [
@@ -75,7 +74,7 @@
       "name": "governance",
       "owner": null,
       "constructor_args": {
-        "membership_contract_name": "masternodes"
+        "membership_contract_name": "validators"
       }
     },
     {
