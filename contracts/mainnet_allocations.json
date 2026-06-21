@@ -1,0 +1,17 @@
+{
+  "schema": "xian.mainnet_allocations.v1",
+  "schema_version": 1,
+  "network": "mainnet",
+  "chain_id": "xian-mainnet-1",
+  "currency": {
+    "balances": {
+      "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e": "11111111.10",
+      "team_lock": "66666666.60",
+      "dao": "33333333.30"
+    }
+  },
+  "notes": [
+    "Draft rehearsal allocation. Replace this with the accepted launch allocation before final genesis.",
+    "Balances are decimal strings and are synchronized into contracts_mainnet.json as currency.initial_balances."
+  ]
+}

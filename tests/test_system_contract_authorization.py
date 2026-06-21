@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 from contracting.local import ContractingClient
+from xian_runtime_types.decimal import ContractingDecimal
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +59,46 @@ def test_dao_payout_requires_validators(client):
 
     assert currency.balance_of(address="alice") == 10
     assert currency.balance_of(address="dao") == 33333323.3
+
+
+def test_currency_default_seed_preserves_distribution(client):
+    currency = submit_contract(
+        client,
+        "currency",
+        "currency.s.py",
+        {"vk": "founder"},
+    )
+
+    assert currency.balance_of(address="founder") == 11111111.1
+    assert currency.balance_of(address="team_lock") == 66666666.6
+    assert currency.balance_of(address="dao") == 33333333.3
+    assert currency.metadata["total_supply"] == 111111111.0
+
+
+def test_currency_seed_accepts_configured_genesis_balances(client):
+    currency = submit_contract(
+        client,
+        "currency",
+        "currency.s.py",
+        {
+            "vk": "founder",
+            "initial_balances": {
+                "alice": "1.25",
+                "bob": "2.50",
+                "dao": "3.75",
+            },
+            "token_metadata": {
+                "token_website": "https://xian.org/mainnet",
+            },
+        },
+    )
+
+    assert currency.balance_of(address="founder") == 0
+    assert currency.balance_of(address="alice") == ContractingDecimal("1.25")
+    assert currency.balance_of(address="bob") == ContractingDecimal("2.50")
+    assert currency.balance_of(address="dao") == ContractingDecimal("3.75")
+    assert currency.metadata["total_supply"] == ContractingDecimal("7.50")
+    assert currency.metadata["token_website"] == "https://xian.org/mainnet"
 
 
 def test_chi_cost_update_requires_validators(client):

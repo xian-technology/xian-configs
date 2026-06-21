@@ -43,7 +43,7 @@ That catalog is the approved home for shielded registry manifests.
 
 Current behavior:
 
-- the catalogs are present for `local`, `devnet`, and `testnet`
+- the catalogs are present for `local`, `devnet`, `testnet`, and `mainnet`
 - they currently carry policy and bundle-admission posture
 - they do not yet publish approved shielded registry manifests by default
 
@@ -76,3 +76,5 @@ inside the canonical network config instead of burying it in release notes.
 This packaging surface does not itself approve any public privacy deployment.
 It provides the canonical place and validation rules for that approval to live
 later.
+
+For mainnet-specific ceremony gates, see `MAINNET_ZK_CEREMONY.md`.

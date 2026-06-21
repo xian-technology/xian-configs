@@ -14,9 +14,14 @@
   `contracts/contracts_<bundle>.json`.
 - Validator policy for active bundles is pinned explicitly in those bundles so
   the bundle behavior does not depend on hidden contract defaults.
-- The canonical `testnet` bundle is also the richest real-network fixture: it
-  pins published node images and release provenance while still deriving fresh
-  deterministic genesis from the current contract bundle.
+- The canonical `testnet` bundle is the richest non-mainnet real-network
+  fixture: it pins published node images and release provenance while still
+  deriving fresh deterministic genesis from the current contract bundle.
+- The canonical `mainnet` bundle is a draft rehearsal manifest for
+  `xian-mainnet-1`. It derives genesis from `contracts_mainnet.json`, starts
+  from one bootstrap validator, enables the chain `zk` runtime feature, and must
+  have its allocation, seed, image pins, and release manifest refreshed before a
+  final launch tag.
 - Networks can also pin privacy-facing metadata here:
   - `privacy_artifact_catalog`: a checksum-pinned catalog of approved shielded
     registry manifests for that network

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "network": "mainnet",
+  "bundle_policy": {
+    "approved_setup_modes": [
+      "ceremony-import"
+    ],
+    "allow_single_party": false
+  },
+  "artifacts": [],
+  "notes": "Mainnet publishes no approved shielded proving bundles until ceremony-derived artifacts are imported, reviewed, and checksum-pinned here."
+}

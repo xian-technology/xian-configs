@@ -53,7 +53,9 @@ The validator policy contract must support the following modes:
   Governance controls validator eligibility and the active set is chosen as the
   top `N` among approved and eligible validators.
 
-The recommended default for future public networks is `hybrid`.
+The recommended default for curated public networks is `hybrid`. The current
+mainnet preparation uses `auto_top_n` because validator admission should be
+driven by total bonded stake rather than governance approval.
 
 ## Canonical Configuration
 
@@ -398,6 +400,25 @@ Selection output:
   Reserved for a later phase.
 
 The recommended rollout mode is `equal`.
+
+## Mainnet Prepared Profile
+
+`contracts/contracts_mainnet.json` currently pins the prepared mainnet policy:
+
+- `selection_mode = "auto_top_n"`
+- `max_validators = 25`
+- `power_mode = "equal"`
+- `rebalance_interval = 720`
+- `activation_delay_epochs = 1`
+- `unbonding_period_days = 14`
+- `max_active_set_churn = 1`
+- `min_bond_margin_bps = 500`
+
+The launch bundle starts from one bootstrap validator. `min_self_bond` and
+`min_total_bond` are initially `0` so the bootstrap validator is not removed
+before validator bonding exists on-chain. Validators are still ranked by
+`self_bond + total_delegated`, so bonded validators displace weaker incumbents
+as the active set fills.
 
 ## ABCI Integration
 

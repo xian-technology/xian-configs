@@ -1,0 +1,113 @@
+{
+  "extension": ".s.py",
+  "contracts": [
+    {
+      "name": "permit_authorizer",
+      "owner": null,
+      "constructor_args": null
+    },
+    {
+      "name": "token_factory",
+      "owner": null,
+      "constructor_args": null
+    },
+    {
+      "name": "currency",
+      "owner": null,
+      "constructor_args": {
+        "vk": "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e",
+        "initial_balances": {
+          "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e": "11111111.10",
+          "team_lock": "66666666.60",
+          "dao": "33333333.30"
+        }
+      }
+    },
+    {
+      "name": "chi_cost",
+      "owner": "validators",
+      "constructor_args": {
+        "initial_rate": 20
+      }
+    },
+    {
+      "name": "rewards",
+      "owner": "validators",
+      "constructor_args": {
+        "initial_split": [
+          0.30,
+          0.01,
+          0.01,
+          0.68
+        ]
+      }
+    },
+    {
+      "name": "foundation",
+      "owner": null,
+      "constructor_args": {
+        "vk": "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e"
+      }
+    },
+    {
+      "name": "dao",
+      "owner": "validators",
+      "constructor_args": null
+    },
+    {
+      "name": "validators",
+      "owner": null,
+      "constructor_args": {
+        "genesis_nodes": [
+          "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e"
+        ],
+        "genesis_powers": {
+          "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e": 10
+        },
+        "genesis_reward_keys": {
+          "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e": "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e"
+        },
+        "genesis_registration_fee": 100000,
+        "default_node_power": 10,
+        "selection_mode": "auto_top_n",
+        "max_validators": 25,
+        "power_mode": "equal",
+        "rebalance_interval": 720,
+        "activation_delay_epochs": 1,
+        "unbonding_period_days": 14,
+        "min_self_bond": 0,
+        "min_total_bond": 0,
+        "max_commission_bps": 2000,
+        "max_active_set_churn": 1,
+        "min_bond_margin_bps": 500,
+        "manual_override_enabled": true,
+        "slash_destination": "dao",
+        "duplicate_vote_slash_bps": 500,
+        "duplicate_vote_jail": true,
+        "light_client_attack_slash_bps": 1000,
+        "light_client_attack_jail": true
+      }
+    },
+    {
+      "name": "governance",
+      "owner": null,
+      "constructor_args": {
+        "membership_contract_name": "validators",
+        "approval_threshold_numerator": 1,
+        "approval_threshold_denominator": 1,
+        "proposal_expiry_days": 7,
+        "min_patch_delay_blocks": 20,
+        "emergency_threshold_numerator": 1,
+        "emergency_threshold_denominator": 1,
+        "emergency_patch_delay_blocks": 5
+      }
+    },
+    {
+      "name": "zk_registry",
+      "owner": null,
+      "constructor_args": {
+        "owner": "governance"
+      }
+    }
+  ]
+}

@@ -74,7 +74,7 @@ network created from this repo, but they are not part of this network catalog.
 ## Key Directories
 
 - `networks/` — manifests and genesis files for canonical networks
-  (`devnet/`, `testnet/`, `local/`).
+  (`devnet/`, `testnet/`, `local/`, `mainnet/`).
 - `contracts/` — canonical contract manifests and source assets referenced by
   the networks above.
 - `templates/` — reusable starter templates for creating purposeful Xian
@@ -109,4 +109,5 @@ artifacts, and committed network contract assets.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — major components and dependency direction
 - [docs/BACKLOG.md](docs/BACKLOG.md) — open work and follow-ups
 - [docs/PRIVACY_NETWORK_PACKAGING.md](docs/PRIVACY_NETWORK_PACKAGING.md) — packaging conventions for privacy-enabled networks
+- [docs/MAINNET_ZK_CEREMONY.md](docs/MAINNET_ZK_CEREMONY.md) — mainnet ceremony gates for shielded proving artifacts
 - [docs/VALIDATOR_DELEGATION.md](docs/VALIDATOR_DELEGATION.md) — validator delegation manifest model
