@@ -406,7 +406,7 @@ The recommended rollout mode is `equal`.
 `contracts/contracts_mainnet.json` currently pins the prepared mainnet policy:
 
 - `selection_mode = "auto_top_n"`
-- `max_validators = 25`
+- `max_validators = 13`
 - `power_mode = "equal"`
 - `rebalance_interval = 720`
 - `activation_delay_epochs = 1`

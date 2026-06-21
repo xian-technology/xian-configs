@@ -70,7 +70,7 @@
         "genesis_registration_fee": 100000,
         "default_node_power": 10,
         "selection_mode": "auto_top_n",
-        "max_validators": 25,
+        "max_validators": 13,
         "power_mode": "equal",
         "rebalance_interval": 720,
         "activation_delay_epochs": 1,
