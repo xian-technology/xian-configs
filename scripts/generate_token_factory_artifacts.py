@@ -59,22 +59,6 @@ def render_generated_block() -> str:
             "./scripts/generate_token_factory_artifacts.py --write`."
         ),
         _chunked_python_string("XSC001_TOKEN_SOURCE", artifacts["source"]),
-        "",
-        _chunked_python_string(
-            "XSC001_TOKEN_VM_IR_TEMPLATE", artifacts["vm_ir_json"]
-        ),
-        "",
-        'XSC001_TOKEN_ARTIFACT_FORMAT = "xian_contract_artifact_v1"',
-        f'XSC001_TOKEN_VM_PROFILE = "{VM_PROFILE}"',
-        f'XSC001_TOKEN_TEMPLATE_MODULE = "{TOKEN_TEMPLATE_MODULE}"',
-        (
-            "XSC001_TOKEN_SOURCE_SHA256 = "
-            f'"{artifacts["hashes"]["source_sha256"]}"'
-        ),
-        (
-            "XSC001_TOKEN_INPUT_SOURCE_SHA256 = "
-            f'"{artifacts["hashes"]["input_source_sha256"]}"'
-        ),
         GENERATED_END_MARKER,
     ]
     return "\n".join(lines)
@@ -121,7 +105,7 @@ def write_token_factory_artifacts() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Generate the token_factory embedded deployment artifacts"
+        description="Generate the token_factory embedded token source"
     )
     parser.add_argument(
         "--check",

@@ -23,26 +23,8 @@ def resolve_controller(address: Any, field_name: str):
     return address
 
 
-def materialize_token_artifact_value(value: str, token_contract: str):
-    return value.replace(XSC001_TOKEN_TEMPLATE_MODULE, token_contract)
-
-
-def build_token_deployment_artifacts(token_contract: str):
-    vm_ir_json = materialize_token_artifact_value(
-        XSC001_TOKEN_VM_IR_TEMPLATE, token_contract
-    )
-    return {
-        "format": XSC001_TOKEN_ARTIFACT_FORMAT,
-        "module_name": token_contract,
-        "vm_profile": XSC001_TOKEN_VM_PROFILE,
-        "source": XSC001_TOKEN_SOURCE,
-        "vm_ir_json": vm_ir_json,
-        "hashes": {
-            "input_source_sha256": XSC001_TOKEN_INPUT_SOURCE_SHA256,
-            "source_sha256": XSC001_TOKEN_SOURCE_SHA256,
-            "vm_ir_sha256": hashlib.sha256_text(vm_ir_json),
-        },
-    }
+def build_token_source():
+    return XSC001_TOKEN_SOURCE
 
 
 @export
@@ -83,7 +65,7 @@ def create_token(
 
     submission.submit_contract(
         name=token_contract,
-        deployment_artifacts=build_token_deployment_artifacts(token_contract),
+        code=build_token_source(),
         owner=None,
         constructor_args={
             "token_name": token_name,
