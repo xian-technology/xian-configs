@@ -32,6 +32,12 @@ jail_reasons = Hash(default_value=None)
 total_slashed = Hash(default_value=0)
 last_slashed_at = Hash(default_value=None)
 processed_evidence = Hash(default_value=False)
+last_evidence_ids = Hash(default_value=None)
+last_evidence_types = Hash(default_value=None)
+last_evidence_heights = Hash(default_value=None)
+last_evidence_at = Hash(default_value=None)
+last_jailed_at = Hash(default_value=None)
+last_unjailed_at = Hash(default_value=None)
 validator_registry = Variable()
 
 powers = Hash(default_value=0)
@@ -135,6 +141,29 @@ ValidatorProposalExpiredEvent = LogEvent(
 )
 
 
+def recovery_vote_types():
+    return [
+        "add_member",
+        "remove_member",
+        "jail_member",
+        "unjail_member",
+        "slash_member",
+        "set_member_power",
+        "change_registration_fee",
+        "chi_cost_change",
+        "change_types",
+        "update_policy",
+    ]
+
+
+def default_vote_types():
+    return recovery_vote_types() + [
+        "reward_change",
+        "dao_payout",
+        "topic_vote",
+    ]
+
+
 @construct
 def seed(
     genesis_nodes: list,
@@ -160,6 +189,8 @@ def seed(
     light_client_attack_slash_bps: int = DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS,
     light_client_attack_jail: bool = True,
 ):
+    assert is_number(genesis_registration_fee), "registration_fee must be numeric."
+    assert genesis_registration_fee > 0, "registration_fee <= 0"
     assert default_node_power > 0, "default_node_power <= 0"
     assert selection_mode in ["manual", "auto_top_n", "hybrid"], "Bad selection mode."
     assert max_validators > 0, "max_validators <= 0"
@@ -180,7 +211,7 @@ def seed(
     pending_unbond_counter.set(0)
     last_rebalance_epoch.set(None)
     validator_registry.set([])
-    types.set(["add_member", "remove_member", "jail_member", "unjail_member", "slash_member", "set_member_power", "change_registration_fee", "reward_change", "dao_payout", "chi_cost_change", "change_types", "update_policy", "topic_vote"])
+    types.set(default_vote_types())
     total_votes.set(0)
     registration_fee.set(genesis_registration_fee)
     config["selection_mode"] = selection_mode
@@ -283,6 +314,35 @@ def normalize_reason(reason: str = None):
 
 def normalize_jail_reason(reason: str = None):
     return normalize_reason(reason)
+
+
+def is_integer(value: Any):
+    return isinstance(value, int) and isinstance(value, bool) == False
+
+
+def is_number(value: Any):
+    return (
+        isinstance(value, (int, float, decimal))
+        and isinstance(value, bool) == False
+    )
+
+
+def validate_non_empty_string(value: Any, label: str):
+    assert isinstance(value, str), label + " must be a string."
+    assert value != "", label + " must be non-empty."
+
+
+def validate_optional_string(value: Any, label: str):
+    if value is not None:
+        assert isinstance(value, str), label + " must be a string."
+
+
+def validate_object_argument(arg: Any, allowed_keys: list, required_keys: list):
+    assert isinstance(arg, dict), "Vote argument must be an object."
+    for key in arg:
+        assert key in allowed_keys, "Unexpected vote argument field."
+    for key in required_keys:
+        assert arg.get(key) is not None, "Missing vote argument field."
 
 
 def active_nodes_list():
@@ -908,6 +968,23 @@ def rebalance_validator_set(force: bool = False):
 
 def validator_record(account: str):
     active = account in active_nodes_list()
+    unbond_count = 0
+    unbond_total = 0
+    next_unbond_unlock_at = None
+    for unbond_id in validator_pending_unbond_ids(account):
+        pending_unbond = pending_unbonds[unbond_id]
+        if pending_unbond is None or pending_unbond["claimed"] == True:
+            continue
+        unbond_count += 1
+        unbond_total += pending_unbond["amount"]
+        unlock_at = pending_unbond["unlock_at"]
+        if next_unbond_unlock_at is None or unlock_at < next_unbond_unlock_at:
+            next_unbond_unlock_at = unlock_at
+
+    previous_rebalance_epoch = last_rebalance_epoch.get()
+    selection_epoch = previous_rebalance_epoch
+    if selection_epoch is None:
+        selection_epoch = 0
 
     return {
         "account": account,
@@ -915,8 +992,14 @@ def validator_record(account: str):
         "active": active,
         "jailed": is_jailed(account),
         "jail_reason": normalize_jail_reason(jail_reasons[account]),
+        "last_jailed_at": last_jailed_at[account],
+        "last_unjailed_at": last_unjailed_at[account],
         "total_slashed": total_slashed[account],
         "last_slashed_at": last_slashed_at[account],
+        "last_evidence_id": last_evidence_ids[account],
+        "last_evidence_type": last_evidence_types[account],
+        "last_evidence_height": last_evidence_heights[account],
+        "last_evidence_at": last_evidence_at[account],
         "power": effective_active_power(account),
         "requested_power": effective_requested_power(account),
         "reward_key": effective_reward_key(account),
@@ -930,8 +1013,18 @@ def validator_record(account: str):
         "total_bond": total_bonded(account),
         "commission_bps": effective_commission_bps(account),
         "delegator_count": len(delegator_list(account)),
+        "pending_unbond_count": unbond_count,
+        "pending_unbond_total": unbond_total,
+        "next_unbond_unlock_at": next_unbond_unlock_at,
         "pending_registration": pending_registrations[account] == True,
         "pending_leave_at": pending_leave[account],
+        "last_rebalance_epoch": previous_rebalance_epoch,
+        "eligible_at_epoch": eligible_at_epoch[account],
+        "selection_eligible_at_last_rebalance": can_be_selected(
+            account,
+            effective_selection_mode(),
+            selection_epoch,
+        ),
         "registered_at": registered_at[account],
         "joined_at": joined_at[account],
         "left_at": left_at[account],
@@ -1098,6 +1191,7 @@ def jail_validator(account: str, reason: str = None):
 
     jailed[account] = True
     jail_reasons[account] = normalize_jail_reason(reason)
+    last_jailed_at[account] = now
     pending_leave[account] = False
     powers[account] = 0
 
@@ -1123,6 +1217,7 @@ def unjail_validator(account: str):
 
     jailed[account] = False
     jail_reasons[account] = None
+    last_unjailed_at[account] = now
 
     if account in active_nodes_list():
         return
@@ -1283,6 +1378,10 @@ def apply_evidence_penalty_internal(
         }
 
     processed_evidence[evidence_id] = True
+    last_evidence_ids[account] = evidence_id
+    last_evidence_types[account] = infraction_type
+    last_evidence_heights[account] = evidence_height
+    last_evidence_at[account] = now
 
     slash_bps = evidence_slash_bps(infraction_type)
     should_jail = evidence_should_jail(infraction_type)
@@ -1349,6 +1448,7 @@ def validate_manual_override_policy(type_of_vote: str):
 
 def validate_vote_argument(type_of_vote: str, arg: Any):
     if type_of_vote == "add_member":
+        validate_non_empty_string(arg, "Member")
         validate_manual_override_policy(type_of_vote)
         if effective_selection_mode() == "manual":
             assert (
@@ -1359,23 +1459,39 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         assert is_jailed(arg) == False, "Jailed."
 
     if type_of_vote == "remove_member":
+        validate_non_empty_string(arg, "Member")
         validate_manual_override_policy(type_of_vote)
         assert arg in active_nodes_list(), "Active only."
 
     if type_of_vote == "jail_member":
+        validate_object_argument(arg, ["member", "reason"], ["member"])
         validate_manual_override_policy(type_of_vote)
         member = arg["member"]
+        validate_non_empty_string(member, "Member")
+        validate_optional_string(arg.get("reason"), "Reason")
         assert is_known_validator(member), "Unknown validator."
         assert is_jailed(member) == False, "Already jailed."
 
     if type_of_vote == "unjail_member":
+        validate_non_empty_string(arg, "Member")
         validate_manual_override_policy(type_of_vote)
         assert is_jailed(arg) == True, "Not jailed."
 
     if type_of_vote == "slash_member":
+        validate_object_argument(
+            arg,
+            ["member", "slash_bps", "reason", "infraction_height"],
+            ["member", "slash_bps"],
+        )
         member = arg["member"]
         slash_bps = arg["slash_bps"]
         infraction_height = arg.get("infraction_height")
+        validate_non_empty_string(member, "Member")
+        assert is_integer(slash_bps), "Slash bps must be an integer."
+        validate_optional_string(arg.get("reason"), "Reason")
+        if infraction_height is not None:
+            assert is_integer(infraction_height), "Infraction height must be an integer."
+            assert infraction_height >= 0, "Infraction height < 0"
         assert has_validator_history(member), "Unknown validator."
         assert slash_bps > 0, "Slash bps <= 0"
         assert slash_bps <= 10000, "Slash bps > 10000"
@@ -1387,18 +1503,86 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         assert total_slashable_bond > 0, "No slashable stake."
 
     if type_of_vote == "set_member_power":
+        validate_object_argument(arg, ["member", "power"], ["member", "power"])
         validate_manual_override_policy(type_of_vote)
         member = arg["member"]
         power = arg["power"]
+        validate_non_empty_string(member, "Member")
+        assert is_integer(power), "Power must be an integer."
         assert member in active_nodes_list(), "Active only."
         assert power > 0, "Power <= 0"
 
     if type_of_vote == "update_policy":
         validate_policy_update(arg)
 
+    if type_of_vote == "change_registration_fee":
+        assert is_number(arg), "Registration fee must be numeric."
+        assert arg > 0, "Registration fee <= 0"
+
+    if type_of_vote == "reward_change":
+        assert isinstance(arg, list), "Reward split must be a list."
+        assert len(arg) == 4, "Reward split must have 4 values."
+        for value in arg:
+            assert is_number(value), "Reward split values must be numeric."
+            assert value > 0, "Reward split values must be positive."
+        assert sum(arg) == 1, "Reward split must sum to 1."
+
+    if type_of_vote == "dao_payout":
+        validate_object_argument(
+            arg,
+            ["contract_name", "amount", "to"],
+            ["contract_name", "amount", "to"],
+        )
+        validate_non_empty_string(arg["contract_name"], "Contract name")
+        assert importlib.exists(arg["contract_name"]), "DAO contract does not exist."
+        assert is_number(arg["amount"]), "DAO amount must be numeric."
+        assert arg["amount"] > 0, "DAO amount must be positive."
+        validate_non_empty_string(arg["to"], "DAO recipient")
+
+    if type_of_vote == "chi_cost_change":
+        assert is_number(arg), "Chi cost must be numeric."
+        assert arg > 0, "Chi cost must be positive."
+
+    if type_of_vote == "change_types":
+        assert isinstance(arg, list), "Vote types must be a list."
+        assert len(arg) > 0, "Vote types must not be empty."
+        seen_types = []
+        for vote_type in arg:
+            validate_non_empty_string(vote_type, "Vote type")
+            assert vote_type not in seen_types, "Duplicate vote type."
+            seen_types.append(vote_type)
+        for recovery_vote_type in recovery_vote_types():
+            assert recovery_vote_type in seen_types, (
+                "Missing recovery vote type: " + recovery_vote_type
+            )
+
+    if type_of_vote == "topic_vote":
+        validate_object_argument(arg, ["topic"], ["topic"])
+        validate_non_empty_string(arg["topic"], "Topic")
+
 
 def validate_policy_update(arg: Any):
-    assert arg is not None, "Missing policy."
+    policy_keys = [
+        "selection_mode",
+        "max_validators",
+        "power_mode",
+        "rebalance_interval",
+        "activation_delay_epochs",
+        "unbonding_period_days",
+        "min_self_bond",
+        "min_total_bond",
+        "max_commission_bps",
+        "max_active_set_churn",
+        "min_bond_margin_bps",
+        "manual_override_enabled",
+        "slash_destination",
+        "duplicate_vote_slash_bps",
+        "duplicate_vote_jail",
+        "light_client_attack_slash_bps",
+        "light_client_attack_jail",
+    ]
+    validate_object_argument(arg, policy_keys, [])
+    assert len(arg) > 0, "Policy update must not be empty."
 
     selection_mode = arg.get("selection_mode")
     if selection_mode is not None:
@@ -1406,6 +1590,7 @@ def validate_policy_update(arg: Any):
 
     max_validators = arg.get("max_validators")
     if max_validators is not None:
+        assert is_integer(max_validators), "max_validators must be an integer."
         assert max_validators > 0, "max_validators <= 0"
 
     power_mode = arg.get("power_mode")
@@ -1414,50 +1599,73 @@ def validate_policy_update(arg: Any):
 
     rebalance_interval = arg.get("rebalance_interval")
     if rebalance_interval is not None:
+        assert is_integer(rebalance_interval), "rebalance_interval must be an integer."
         assert rebalance_interval > 0, "rebalance_interval <= 0"
 
     activation_delay_epochs = arg.get("activation_delay_epochs")
     if activation_delay_epochs is not None:
+        assert is_integer(activation_delay_epochs), "activation_delay_epochs must be an integer."
         assert activation_delay_epochs >= 0, "activation_delay_epochs < 0"
 
     unbonding_period_days = arg.get("unbonding_period_days")
     if unbonding_period_days is not None:
+        assert is_integer(unbonding_period_days), "unbonding_period_days must be an integer."
         assert unbonding_period_days >= 0, "unbonding_period_days < 0"
 
     min_self_bond = arg.get("min_self_bond")
     if min_self_bond is not None:
+        assert is_integer(min_self_bond), "min_self_bond must be an integer."
         assert min_self_bond >= 0, "min_self_bond < 0"
 
     min_total_bond = arg.get("min_total_bond")
     if min_total_bond is not None:
+        assert is_integer(min_total_bond), "min_total_bond must be an integer."
         assert min_total_bond >= 0, "min_total_bond < 0"
 
     max_commission_bps = arg.get("max_commission_bps")
     if max_commission_bps is not None:
+        assert is_integer(max_commission_bps), "max_commission_bps must be an integer."
         assert max_commission_bps >= 0, "max_comm < 0"
         assert max_commission_bps <= MAX_COMMISSION_BPS, "max_comm high"
 
     max_active_set_churn = arg.get("max_active_set_churn")
     if max_active_set_churn is not None:
+        assert is_integer(max_active_set_churn), "max_active_set_churn must be an integer."
         assert max_active_set_churn >= 0, "max_churn < 0"
 
     min_bond_margin_bps = arg.get("min_bond_margin_bps")
     if min_bond_margin_bps is not None:
+        assert is_integer(min_bond_margin_bps), "min_bond_margin_bps must be an integer."
         assert min_bond_margin_bps >= 0, "margin_bps < 0"
+
+    manual_override_enabled = arg.get("manual_override_enabled")
+    if manual_override_enabled is not None:
+        assert isinstance(manual_override_enabled, bool), "manual_override_enabled must be boolean."
 
     slash_destination = arg.get("slash_destination")
     if slash_destination is not None:
+        assert isinstance(slash_destination, str), "slash_destination must be a string."
         assert slash_destination != "", "empty slash dst"
 
     duplicate_vote_slash_bps = arg.get("duplicate_vote_slash_bps")
     if duplicate_vote_slash_bps is not None:
+        assert is_integer(duplicate_vote_slash_bps), "duplicate_vote_slash_bps must be an integer."
         assert duplicate_vote_slash_bps >= 0, "dv bps < 0"
         assert duplicate_vote_slash_bps <= 10000, "dv bps > 10000"
 
     light_client_attack_slash_bps = arg.get("light_client_attack_slash_bps")
     if light_client_attack_slash_bps is not None:
+        assert is_integer(light_client_attack_slash_bps), "light_client_attack_slash_bps must be an integer."
         assert light_client_attack_slash_bps >= 0, "lca bps < 0"
         assert light_client_attack_slash_bps <= 10000, "lca bps > 10000"
+
+    duplicate_vote_jail = arg.get("duplicate_vote_jail")
+    if duplicate_vote_jail is not None:
+        assert isinstance(duplicate_vote_jail, bool), "duplicate_vote_jail must be boolean."
+
+    light_client_attack_jail = arg.get("light_client_attack_jail")
+    if light_client_attack_jail is not None:
+        assert isinstance(light_client_attack_jail, bool), "light_client_attack_jail must be boolean."
 
 
 def apply_policy_update(arg: Any):
@@ -1795,6 +2003,14 @@ def get_pending_candidates():
 
 
 @export
+def get_validators():
+    current_validators = []
+    for account in validator_registry_list():
+        current_validators.append(validator_record(account))
+    return current_validators
+
+
+@export
 def get_validator(account: str):
     return validator_record(account)
 
@@ -1820,6 +2036,11 @@ def get_policy_config():
         "light_client_attack_slash_bps": config["light_client_attack_slash_bps"],
         "light_client_attack_jail": config["light_client_attack_jail"],
     }
+
+
+@export
+def get_recovery_vote_types():
+    return recovery_vote_types()
 
 
 @export
@@ -1938,9 +2159,7 @@ def leave():
     assert pending_leave_at, "Not pending."
     assert pending_leave_at < now, "Leave announcement period not over."
 
-    if ctx.caller in active_nodes_list():
-        exit_validator(ctx.caller, STATUS_LEFT, True)
-    pending_leave[ctx.caller] = False
+    exit_validator(ctx.caller, STATUS_LEFT, True)
     return validator_record(ctx.caller)
 
 

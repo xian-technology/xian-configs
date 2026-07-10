@@ -157,6 +157,12 @@ Required state keys:
 - `total_slashed[validator] -> decimal`
 - `last_slashed_at[validator] -> datetime | None`
 - `processed_evidence[evidence_id] -> bool`
+- `last_evidence_ids[validator] -> str | None`
+- `last_evidence_types[validator] -> str | None`
+- `last_evidence_heights[validator] -> int | None`
+- `last_evidence_at[validator] -> datetime | None`
+- `last_jailed_at[validator] -> datetime | None`
+- `last_unjailed_at[validator] -> datetime | None`
 - `config[<name>] -> value`
 
 `holdings` in the existing contract represents the registration bond and should
@@ -445,6 +451,38 @@ This lets reward splitting ship before automatic validator-set selection.
 
 ## Governance Surface
 
+`propose_vote` validates each built-in vote type before a proposal id is
+allocated. Scalar amounts/power/basis points, typed objects, policy keys,
+reward splits, DAO payouts, vote-type lists, and topic payloads reject empty,
+unknown, negative, duplicate, or wrong-type values at proposal creation rather
+than deferring failure until finalization.
+
+The registration fee must remain positive because `register()` transfers that
+amount through `currency.transfer_from`, which rejects zero-value transfers.
+
+`change_types` cannot remove the immutable recovery vote types:
+
+- `add_member`
+- `remove_member`
+- `jail_member`
+- `unjail_member`
+- `slash_member`
+- `set_member_power`
+- `change_registration_fee`
+- `chi_cost_change`
+- `change_types`
+- `update_policy`
+
+That fail-closed set preserves validator membership/quorum repair, safety
+actions, voting power, candidate fee repair, chi-cost repair, restoration of
+the vote surface itself, and selection-policy recovery. `reward_change`,
+`dao_payout` and `topic_vote` remain configurable.
+
+Read clients can use `get_validators()` for the full registry, including
+`left`, `removed`, and `withdrawn` records. Each validator record includes
+pending-unbond aggregates, last-rebalance epoch/eligibility, jail/unjail times,
+slash totals, and last evidence metadata.
+
 Governance vote types should eventually include:
 
 - `add_member`
@@ -475,6 +513,7 @@ Governance vote types should eventually include:
 - `total_bond[v] = self_bond[v] + total_delegated[v]`.
 - `total_slashed[v] >= 0`.
 - processed evidence must not be applied twice.
+- every value stored in `types` includes all immutable recovery vote types.
 - If `delegations[d, v] == 0`, `d` should eventually be removed from
   `delegator_lists[v]`.
 - If `status in {left, removed, withdrawn}`, then `self_bond[v] == 0` and

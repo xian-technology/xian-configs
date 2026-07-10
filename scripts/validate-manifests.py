@@ -105,9 +105,13 @@ def load_mainnet_allocations() -> dict[str, str]:
     if payload.get("schema") != "xian.mainnet_allocations.v1":
         raise SystemExit(f"unsupported mainnet allocation schema in {allocation_path}")
     if payload.get("schema_version") != 1:
-        raise SystemExit(f"unsupported mainnet allocation schema_version in {allocation_path}")
+        raise SystemExit(
+            f"unsupported mainnet allocation schema_version in {allocation_path}"
+        )
     if payload.get("network") != "mainnet":
-        raise SystemExit(f"mainnet allocation network must be mainnet in {allocation_path}")
+        raise SystemExit(
+            f"mainnet allocation network must be mainnet in {allocation_path}"
+        )
     if payload.get("chain_id") != CANONICAL_MAINNET_CHAIN_ID:
         raise SystemExit(
             "mainnet allocation chain_id must be "
@@ -116,7 +120,9 @@ def load_mainnet_allocations() -> dict[str, str]:
 
     currency = payload.get("currency")
     if not isinstance(currency, dict):
-        raise SystemExit(f"mainnet allocation currency must be an object in {allocation_path}")
+        raise SystemExit(
+            f"mainnet allocation currency must be an object in {allocation_path}"
+        )
     balances = currency.get("balances")
     if not isinstance(balances, dict) or not balances:
         raise SystemExit(
@@ -127,13 +133,17 @@ def load_mainnet_allocations() -> dict[str, str]:
     total_supply = Decimal("0")
     for account, amount in balances.items():
         if not isinstance(account, str) or not account:
-            raise SystemExit(f"mainnet allocation account must be non-empty in {allocation_path}")
+            raise SystemExit(
+                f"mainnet allocation account must be non-empty in {allocation_path}"
+            )
         normalized_amount = normalize_amount_string(amount)
         normalized[account] = normalized_amount
         total_supply += Decimal(normalized_amount)
 
     if total_supply <= 0:
-        raise SystemExit(f"mainnet allocation total supply must be positive in {allocation_path}")
+        raise SystemExit(
+            f"mainnet allocation total supply must be positive in {allocation_path}"
+        )
     return normalized
 
 
@@ -154,8 +164,7 @@ def validate_explicit_genesis_key_maps(
             f"{label} genesis_powers keys must match genesis_nodes exactly in {bundle_path}"
         )
     if any(
-        not isinstance(power, int) or power <= 0
-        for power in genesis_powers.values()
+        not isinstance(power, int) or power <= 0 for power in genesis_powers.values()
     ):
         raise SystemExit(
             f"{label} genesis_powers must be positive integers in {bundle_path}"
@@ -203,7 +212,9 @@ def validate_rewards_config(
             f"{label} rewards initial_split must contain only positive values in {bundle_path}"
         )
     if abs(sum(reward_split) - 1) > 1e-9:
-        raise SystemExit(f"{label} rewards initial_split must sum to 1 in {bundle_path}")
+        raise SystemExit(
+            f"{label} rewards initial_split must sum to 1 in {bundle_path}"
+        )
 
 
 def validate_governance_config(
@@ -212,10 +223,14 @@ def validate_governance_config(
     contracts: list[dict],
     bundle_path: Path,
 ) -> dict:
-    governance_contract = find_contract(contracts, "governance", bundle_path=bundle_path)
+    governance_contract = find_contract(
+        contracts, "governance", bundle_path=bundle_path
+    )
     governance_args = governance_contract.get("constructor_args")
     if not isinstance(governance_args, dict):
-        raise SystemExit(f"{label} must pin governance constructor_args in {bundle_path}")
+        raise SystemExit(
+            f"{label} must pin governance constructor_args in {bundle_path}"
+        )
     missing_governance_keys = [
         key
         for key in REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS
@@ -274,7 +289,9 @@ def validate_mainnet_currency_allocations(
     currency_contract = find_contract(contracts, "currency", bundle_path=bundle_path)
     constructor_args = currency_contract.get("constructor_args")
     if not isinstance(constructor_args, dict):
-        raise SystemExit(f"mainnet currency constructor_args must be an object in {bundle_path}")
+        raise SystemExit(
+            f"mainnet currency constructor_args must be an object in {bundle_path}"
+        )
     initial_balances = constructor_args.get("initial_balances")
     if not isinstance(initial_balances, dict) or not initial_balances:
         raise SystemExit(
@@ -307,9 +324,7 @@ def validate_contract_bundles() -> None:
         payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         contracts = payload.get("contracts")
         if not isinstance(contracts, list) or not contracts:
-            raise SystemExit(
-                f"contract bundle has no contracts array: {bundle_path}"
-            )
+            raise SystemExit(f"contract bundle has no contracts array: {bundle_path}")
 
         validators_contract = next(
             (
@@ -327,8 +342,7 @@ def validate_contract_bundles() -> None:
         constructor_args = validators_contract.get("constructor_args")
         if not isinstance(constructor_args, dict):
             raise SystemExit(
-                "validators constructor_args must be an object in "
-                f"{bundle_path}"
+                f"validators constructor_args must be an object in {bundle_path}"
             )
 
         missing_keys = [
@@ -346,6 +360,16 @@ def validate_contract_bundles() -> None:
         if not isinstance(genesis_nodes, list) or not genesis_nodes:
             raise SystemExit(
                 f"validators genesis_nodes must be a non-empty list in {bundle_path}"
+            )
+
+        registration_fee = constructor_args["genesis_registration_fee"]
+        if (
+            isinstance(registration_fee, bool)
+            or not isinstance(registration_fee, (int, float))
+            or registration_fee <= 0
+        ):
+            raise SystemExit(
+                f"validators genesis_registration_fee must be positive in {bundle_path}"
             )
 
         if bundle_name == "testnet":
@@ -470,7 +494,9 @@ def validate_contract_bundles() -> None:
                 )
             if (
                 not isinstance(governance_args["approval_threshold_numerator"], int)
-                or not isinstance(governance_args["approval_threshold_denominator"], int)
+                or not isinstance(
+                    governance_args["approval_threshold_denominator"], int
+                )
                 or governance_args["approval_threshold_numerator"] <= 0
                 or governance_args["approval_threshold_denominator"] <= 0
                 or governance_args["approval_threshold_numerator"]
@@ -482,7 +508,9 @@ def validate_contract_bundles() -> None:
                 )
             if (
                 not isinstance(governance_args["emergency_threshold_numerator"], int)
-                or not isinstance(governance_args["emergency_threshold_denominator"], int)
+                or not isinstance(
+                    governance_args["emergency_threshold_denominator"], int
+                )
                 or governance_args["emergency_threshold_numerator"] <= 0
                 or governance_args["emergency_threshold_denominator"] <= 0
                 or governance_args["emergency_threshold_numerator"]
@@ -707,8 +735,7 @@ def validate_network_manifests() -> None:
                 )
             if genesis["genesis_time"] is None:
                 raise SystemExit(
-                    "canonical testnet must pin genesis_time in "
-                    f"{manifest_path}"
+                    f"canonical testnet must pin genesis_time in {manifest_path}"
                 )
             if manifest["node_image_mode"] != "registry":
                 raise SystemExit(
