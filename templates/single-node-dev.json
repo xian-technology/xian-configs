@@ -2,27 +2,27 @@
   "schema_version": 1,
   "name": "single-node-dev",
   "display_name": "Single-Node Dev",
-  "description": "Fast local contract iteration on one node with the optional dashboard enabled.",
-  "block_policy_mode": "on_demand",
-  "block_policy_interval": "0s",
+  "description": "Full local development node with indexed reads, GraphQL, dashboard, and monitoring enabled.",
+  "block_policy_mode": "periodic",
+  "block_policy_interval": "5s",
   "parallel_execution_enabled": false,
   "parallel_execution_workers": 4,
   "parallel_execution_min_transactions": 8,
   "operator_profile": "local_development",
-  "monitoring_profile": "none",
+  "monitoring_profile": "local_stack",
   "bootstrap_node_name": "validator-1",
   "additional_validator_names": [],
   "services": {
     "bds": {
-      "enabled": false
+      "enabled": true
     },
     "dashboard": {
       "enabled": true,
-      "host": "0.0.0.0",
+      "host": "127.0.0.1",
       "port": 18080
     },
     "monitoring": {
-      "enabled": false
+      "enabled": true
     }
   },
   "advanced": {

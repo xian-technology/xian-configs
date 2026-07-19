@@ -23,6 +23,13 @@
   `none`, `local_stack`, or `bds`.
 - `services` contains the sidecars that the generated node profile should
   enable. `services.bds.enabled` controls the Blockchain Data Service.
+- `single-node-dev` enables the complete self-contained development surface:
+  BDS/Postgres, GraphQL/GraphiQL, the dashboard, Prometheus, and Grafana. These
+  services bind to loopback on the host unless an operator explicitly opts in
+  to public exposure. Five-second periodic blocks keep contract time advancing
+  during idle interactive sessions.
+- Product- or credential-dependent sidecars such as IntentKit, DEX automation,
+  and the shielded relayer remain explicit profile choices.
 - `advanced` contains template-specific low-level runtime overrides. The
   starter templates bind application metrics to `0.0.0.0` inside containers;
   stack and deploy host-publish settings still control public exposure.
