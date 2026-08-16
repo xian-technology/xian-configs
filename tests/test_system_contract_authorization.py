@@ -121,13 +121,29 @@ def test_chi_cost_update_requires_validators(client):
 
 def test_rewards_update_requires_validators(client):
     rewards = submit_contract(client, "rewards", "rewards.s.py")
-    new_split = [0.25, 0.05, 0.05, 0.65]
+    new_split = [0.65, 0, 0, 0.35]
 
     with pytest.raises(AssertionError, match="Only validators"):
         rewards.set_value(new_value=new_split, signer="alice")
 
-    assert rewards.current_value() == [0.30, 0.01, 0.01, 0.68]
+    assert rewards.current_value() == [0.70, 0, 0, 0.30]
 
     rewards.set_value(new_value=new_split, signer="validators")
 
     assert rewards.current_value() == new_split
+
+    with pytest.raises(AssertionError, match="non-negative"):
+        rewards.set_value(
+            new_value=[0.70, -0.10, 0, 0.40],
+            signer="validators",
+        )
+
+
+def test_rewards_seed_validates_the_initial_split(client):
+    with pytest.raises(AssertionError, match="non-negative"):
+        submit_contract(
+            client,
+            "rewards",
+            "rewards.s.py",
+            {"initial_split": [0.70, -0.10, 0, 0.40]},
+        )

@@ -455,7 +455,9 @@ This lets reward splitting ship before automatic validator-set selection.
 allocated. Scalar amounts/power/basis points, typed objects, policy keys,
 reward splits, DAO payouts, vote-type lists, and topic payloads reject empty,
 unknown, negative, duplicate, or wrong-type values at proposal creation rather
-than deferring failure until finalization.
+than deferring failure until finalization. Reward splits contain validator,
+burn, foundation, and developer ratios in that order. Individual ratios may be
+zero, but all four values must be numeric, non-negative, and sum to one.
 
 The registration fee must remain positive because `register()` transfers that
 amount through `currency.transfer_from`, which rejects zero-value transfers.
@@ -519,6 +521,10 @@ Governance vote types should eventually include:
 - If `status in {left, removed, withdrawn}`, then `self_bond[v] == 0` and
   `total_delegated[v] == 0`.
 - Reward distribution must conserve value exactly.
+- The canonical fee split is 70% validators, 0% burn, 0% foundation, and 30%
+  contract developers.
+- A developer share without a claimable developer returns to the validator
+  reward pool before operator commission and delegation splitting.
 - Registration bond and self-bond are distinct balances.
 
 ## Rollout Plan

@@ -1524,7 +1524,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         assert len(arg) == 4, "Reward split must have 4 values."
         for value in arg:
             assert is_number(value), "Reward split values must be numeric."
-            assert value > 0, "Reward split values must be positive."
+            assert value >= 0, "Reward split values must be non-negative."
         assert sum(arg) == 1, "Reward split must sum to 1."
 
     if type_of_vote == "dao_payout":

@@ -28,7 +28,14 @@
     {
       "name": "rewards",
       "owner": "validators",
-      "constructor_args": null
+      "constructor_args": {
+        "initial_split": [
+          0.70,
+          0,
+          0,
+          0.30
+        ]
+      }
     },
     {
       "name": "foundation",

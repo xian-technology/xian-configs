@@ -202,14 +202,17 @@ def validate_rewards_config(
     if (
         not isinstance(reward_split, list)
         or len(reward_split) != 4
-        or any(not isinstance(item, (int, float)) for item in reward_split)
+        or any(
+            isinstance(item, bool) or not isinstance(item, (int, float))
+            for item in reward_split
+        )
     ):
         raise SystemExit(
             f"{label} rewards initial_split must be a 4-item numeric list in {bundle_path}"
         )
-    if any(item <= 0 for item in reward_split):
+    if any(item < 0 for item in reward_split):
         raise SystemExit(
-            f"{label} rewards initial_split must contain only positive values in {bundle_path}"
+            f"{label} rewards initial_split must contain only non-negative values in {bundle_path}"
         )
     if abs(sum(reward_split) - 1) > 1e-9:
         raise SystemExit(
@@ -372,6 +375,12 @@ def validate_contract_bundles() -> None:
                 f"validators genesis_registration_fee must be positive in {bundle_path}"
             )
 
+        validate_rewards_config(
+            label=f"canonical {bundle_name}",
+            contracts=contracts,
+            bundle_path=bundle_path,
+        )
+
         if bundle_name == "testnet":
             if len(genesis_nodes) != CANONICAL_TESTNET_NODE_COUNT:
                 raise SystemExit(
@@ -417,45 +426,6 @@ def validate_contract_bundles() -> None:
                 raise SystemExit(
                     "canonical testnet genesis_reward_keys values must be "
                     f"non-empty strings in {bundle_path}"
-                )
-
-            rewards_contract = next(
-                (
-                    contract
-                    for contract in contracts
-                    if contract.get("name") == "rewards"
-                ),
-                None,
-            )
-            if rewards_contract is None:
-                raise SystemExit(
-                    f"canonical testnet missing rewards contract in {bundle_path}"
-                )
-            rewards_args = rewards_contract.get("constructor_args")
-            if not isinstance(rewards_args, dict):
-                raise SystemExit(
-                    "canonical testnet must pin rewards constructor_args in "
-                    f"{bundle_path}"
-                )
-            reward_split = rewards_args.get("initial_split")
-            if (
-                not isinstance(reward_split, list)
-                or len(reward_split) != 4
-                or any(not isinstance(item, (int, float)) for item in reward_split)
-            ):
-                raise SystemExit(
-                    "canonical testnet rewards initial_split must be a 4-item "
-                    f"numeric list in {bundle_path}"
-                )
-            if any(item <= 0 for item in reward_split):
-                raise SystemExit(
-                    "canonical testnet rewards initial_split must contain only "
-                    f"positive values in {bundle_path}"
-                )
-            if abs(sum(reward_split) - 1) > 1e-9:
-                raise SystemExit(
-                    "canonical testnet rewards initial_split must sum to 1 in "
-                    f"{bundle_path}"
                 )
 
             governance_contract = next(
@@ -542,11 +512,6 @@ def validate_contract_bundles() -> None:
                 label="canonical mainnet",
                 constructor_args=constructor_args,
                 genesis_nodes=genesis_nodes,
-                bundle_path=bundle_path,
-            )
-            validate_rewards_config(
-                label="canonical mainnet",
-                contracts=contracts,
                 bundle_path=bundle_path,
             )
             governance_args = validate_governance_config(

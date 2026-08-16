@@ -30,10 +30,10 @@
       "owner": "validators",
       "constructor_args": {
         "initial_split": [
-          0.30,
-          0.01,
-          0.01,
-          0.68
+          0.70,
+          0,
+          0,
+          0.30
         ]
       }
     },
