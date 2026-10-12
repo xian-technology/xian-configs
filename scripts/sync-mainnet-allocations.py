@@ -45,6 +45,10 @@ def load_allocation_balances(path: Path = ALLOCATIONS_PATH) -> dict[str, str]:
     if not isinstance(currency, dict):
         raise ValueError(f"allocation currency must be an object in {path}")
     balances = currency.get("balances")
+    if payload.get("status") == "pending_snapshot":
+        if balances != {}:
+            raise ValueError("pending allocations must have no placeholder balances")
+        return {}
     if not isinstance(balances, dict) or not balances:
         raise ValueError(f"allocation currency.balances must be a non-empty object in {path}")
 

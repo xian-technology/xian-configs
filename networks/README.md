@@ -19,9 +19,9 @@
   deriving fresh deterministic genesis from the current contract bundle.
 - The canonical `mainnet` bundle is a draft rehearsal manifest for
   `xian-mainnet-1`. It derives genesis from `contracts_mainnet.json`, starts
-  from one bootstrap validator, enables the chain `zk` runtime feature, and must
-  have its allocation, seed, image pins, and release manifest refreshed before a
-  final launch tag.
+  from one bootstrap validator and enables the chain `zk` runtime feature.
+  Its allocation is `pending_snapshot`, so the bundle cannot build genesis
+  without an explicit reconciled balance import.
 - Networks can also pin privacy-facing metadata here:
   - `privacy_artifact_catalog`: a checksum-pinned catalog of approved shielded
     registry manifests for that network

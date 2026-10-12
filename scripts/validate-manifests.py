@@ -124,6 +124,10 @@ def load_mainnet_allocations() -> dict[str, str]:
             f"mainnet allocation currency must be an object in {allocation_path}"
         )
     balances = currency.get("balances")
+    if payload.get("status") == "pending_snapshot":
+        if balances != {}:
+            raise ValueError("pending allocations must have no placeholder balances")
+        return {}
     if not isinstance(balances, dict) or not balances:
         raise SystemExit(
             f"mainnet allocation currency.balances must be a non-empty object in {allocation_path}"
@@ -296,7 +300,7 @@ def validate_mainnet_currency_allocations(
             f"mainnet currency constructor_args must be an object in {bundle_path}"
         )
     initial_balances = constructor_args.get("initial_balances")
-    if not isinstance(initial_balances, dict) or not initial_balances:
+    if not isinstance(initial_balances, dict):
         raise SystemExit(
             f"mainnet currency constructor_args.initial_balances must be non-empty in {bundle_path}"
         )
@@ -325,6 +329,10 @@ def validate_contract_bundles() -> None:
     for bundle_name in ACTIVE_BUNDLE_NAMES:
         bundle_path = contracts_dir / f"contracts_{bundle_name}.json"
         payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        if payload.get("account_registry") != {"version": 1, "enrollment_open": False, "transition_chi": 100000}:
+            raise SystemExit("all active bundles must pin closed account enrollment")
+        if bundle_name == "mainnet" and payload.get("balance_migration") != {"status": "pending_snapshot"}:
+            raise SystemExit("canonical mainnet must remain pending; generate migration bundles separately")
         contracts = payload.get("contracts")
         if not isinstance(contracts, list) or not contracts:
             raise SystemExit(f"contract bundle has no contracts array: {bundle_path}")

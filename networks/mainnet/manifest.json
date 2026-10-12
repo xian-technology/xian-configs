@@ -32,10 +32,10 @@
     "genesis_time": "2026-06-21T00:00:00.000000Z"
   },
   "genesis_build": {
-    "status": "draft-rehearsal",
+    "status": "pending-snapshot",
     "allocation_source": "../../contracts/mainnet_allocations.json",
     "finalization_required": [
-      "replace the draft allocation with the accepted launch allocation",
+      "accept a finalized source snapshot and explicit contract-balance dispositions; generate and rehearse a reconciled genesis bundle",
       "publish the final bootstrap seed",
       "refresh node_release_manifest and image pins from the stable release train",
       "pin approved ceremony-derived shielded artifacts or keep the catalog empty"

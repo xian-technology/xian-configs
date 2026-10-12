@@ -39,7 +39,7 @@ def test_dao_payout_requires_validators(client):
         client,
         "currency",
         "currency.s.py",
-        {"vk": "founder"},
+        {"vk": "founder", "initial_balances": {"founder": "111111111", "dao": "33333333.3"}},
     )
     dao = submit_contract(client, "dao", "dao.s.py")
 
@@ -61,7 +61,7 @@ def test_dao_payout_requires_validators(client):
     assert currency.balance_of(address="dao") == 33333323.3
 
 
-def test_currency_default_seed_preserves_distribution(client):
+def test_currency_development_seed_has_no_historical_distribution(client):
     currency = submit_contract(
         client,
         "currency",
@@ -69,9 +69,9 @@ def test_currency_default_seed_preserves_distribution(client):
         {"vk": "founder"},
     )
 
-    assert currency.balance_of(address="founder") == 11111111.1
-    assert currency.balance_of(address="team_lock") == 66666666.6
-    assert currency.balance_of(address="dao") == 33333333.3
+    assert currency.balance_of(address="founder") == 111111111
+    assert currency.balance_of(address="team_lock") == 0
+    assert currency.balance_of(address="dao") == 0
     assert currency.metadata["total_supply"] == 111111111.0
 
 

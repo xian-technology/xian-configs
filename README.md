@@ -111,3 +111,21 @@ artifacts, and committed network contract assets.
 - [docs/PRIVACY_NETWORK_PACKAGING.md](docs/PRIVACY_NETWORK_PACKAGING.md) — packaging conventions for privacy-enabled networks
 - [docs/MAINNET_ZK_CEREMONY.md](docs/MAINNET_ZK_CEREMONY.md) — mainnet ceremony gates for shielded proving artifacts
 - [docs/VALIDATOR_DELEGATION.md](docs/VALIDATOR_DELEGATION.md) — validator delegation manifest model
+
+## Fresh-chain balances and authorization
+
+The currency contract has no permit authorizer or off-chain permit entrypoints.
+`approve` and `transfer` use the transaction's authenticated caller. Stream
+payments are separate direct-call contracts. Currency metadata starts under
+`governance`; no `team_lock` contract, allocation or metadata role is assumed.
+Development bundles without explicit balances allocate their test supply to
+`vk`. That development convenience is not used for mainnet migration.
+
+Every active bundle pins closed `_accounts.policy` (version 1, transition cost
+100000 chi).
+The mainnet allocation is empty and `pending_snapshot`; it cannot build genesis.
+Use the importer to generate a separate reviewed bundle rather than inventing
+placeholder balances. See the [migration specification](../xian-meta/docs/SNAPSHOT_GENESIS_MIGRATION.md).
+Existing users retain their exact addresses and old-key access until optional
+hybrid enrollment. Old approvals, permits, streams and historical contract state
+are not imported. Enrollment is disabled in all checked-in bundles.

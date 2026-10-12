@@ -2,11 +2,6 @@
   "extension": ".s.py",
   "contracts": [
     {
-      "name": "permit_authorizer",
-      "owner": null,
-      "constructor_args": null
-    },
-    {
       "name": "token_factory",
       "owner": null,
       "constructor_args": null
@@ -16,11 +11,7 @@
       "owner": null,
       "constructor_args": {
         "vk": "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e",
-        "initial_balances": {
-          "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e": "11111111.10",
-          "team_lock": "66666666.60",
-          "dao": "33333333.30"
-        }
+        "initial_balances": {}
       }
     },
     {
@@ -35,10 +26,10 @@
       "owner": "validators",
       "constructor_args": {
         "initial_split": [
-          0.70,
+          0.7,
           0,
           0,
-          0.30
+          0.3
         ]
       }
     },
@@ -109,5 +100,13 @@
         "owner": "governance"
       }
     }
-  ]
+  ],
+  "account_registry": {
+    "version": 1,
+    "enrollment_open": false,
+    "transition_chi": 100000
+  },
+  "balance_migration": {
+    "status": "pending_snapshot"
+  }
 }

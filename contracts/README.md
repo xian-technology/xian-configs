@@ -13,3 +13,7 @@
 - `mainnet_allocations.json` is the source file for mainnet currency genesis
   balances. Run `../scripts/sync-mainnet-allocations.py` after editing it, then
   validate with `../scripts/validate-manifests.py`.
+
+`mainnet_allocations.json` is an empty `pending_snapshot` allocation. Genesis
+construction rejects it; use the reconciled balance importer for a separate
+candidate bundle. All checked-in bundles set account enrollment to closed.
