@@ -168,15 +168,16 @@ def test_validator_registration_requires_the_signing_account(client):
     client.submit(
         "@export\n"
         "def register():\n"
+        "    importlib.import_module('currency').approve(amount=1000, to='validators')\n"
         "    importlib.import_module('validators').register()\n",
         name="con_registrar",
     )
     currency.transfer(amount=1000, to="con_registrar", signer="founder")
-    currency.approve(amount=1000, to="validators", signer="con_registrar")
 
     with pytest.raises(AssertionError, match="own account"):
         client.get_contract_proxy("con_registrar").register(signer="alice")
     assert not client.raw_driver.get("validators.pending_registrations:con_registrar")
+    assert currency.balance_of(address="con_registrar") == 1000
 
     currency.transfer(amount=1000, to="alice", signer="founder")
     currency.approve(amount=1000, to="validators", signer="alice")
