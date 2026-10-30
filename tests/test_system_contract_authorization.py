@@ -147,3 +147,38 @@ def test_rewards_seed_validates_the_initial_split(client):
             "rewards.s.py",
             {"initial_split": [0.70, -0.10, 0, 0.40]},
         )
+
+
+def _deploy_validators(client):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    submit_contract(client, "dao", "dao.s.py")
+    submit_contract(client, "rewards", "rewards.s.py")
+    submit_contract(client, "chi_cost", "chi_cost.s.py", {"initial_rate": 20})
+    validators = submit_contract(
+        client,
+        "validators",
+        "validators.s.py",
+        {"genesis_nodes": ["node1"], "genesis_registration_fee": 1000},
+    )
+    return client.get_contract_proxy("currency"), validators
+
+
+def test_validator_registration_requires_the_signing_account(client):
+    currency, validators = _deploy_validators(client)
+    client.submit(
+        "@export\n"
+        "def register():\n"
+        "    importlib.import_module('validators').register()\n",
+        name="con_registrar",
+    )
+    currency.transfer(amount=1000, to="con_registrar", signer="founder")
+    currency.approve(amount=1000, to="validators", signer="con_registrar")
+
+    with pytest.raises(AssertionError, match="own account"):
+        client.get_contract_proxy("con_registrar").register(signer="alice")
+    assert not client.raw_driver.get("validators.pending_registrations:con_registrar")
+
+    currency.transfer(amount=1000, to="alice", signer="founder")
+    currency.approve(amount=1000, to="validators", signer="alice")
+    validators.register(signer="alice")
+    assert client.raw_driver.get("validators.pending_registrations:alice") is True

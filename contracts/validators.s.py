@@ -2181,6 +2181,9 @@ def register(
     if metadata_uri is None:
         metadata_uri = ""
 
+    # The registering identity becomes the validator's consensus key, so it
+    # must be the signing account itself, never a contract acting for it.
+    assert ctx.caller == ctx.signer, "Validators must register from their own account."
     assert ctx.caller not in active_nodes_list(), "Already a node."
     assert pending_registrations[ctx.caller] == False, "Already pending."
     assert requested_validator_power > 0, "Validator power <= 0"
