@@ -41,7 +41,7 @@
 - Treat these files as reusable defaults, not as live network state.
 
 Fresh genesis is built by the selected node release and commits its execution
-policy. The current local release requires `xvm-execution-2`, `xvm-gas-2`,
+policy. The current local release requires `xvm-execution-3`, `xvm-gas-2`,
 `xvm-1` bytecode and the `xian-set-1` codec. These templates do not override
 that consensus policy. Reusing a template does not migrate an earlier node
 database; retain its original runtime for historical replay and create fresh
