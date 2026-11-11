@@ -168,6 +168,27 @@ def _deploy_validators(client, constructor_args=None):
     return client.get_contract_proxy("currency"), validators
 
 
+@pytest.mark.parametrize("rate", [Decimal("7.5"), Decimal("7")])
+def test_chi_cost_proposal_rejects_values_the_chi_cost_contract_cannot_store(client, rate):
+    _, validators = _deploy_validators(client, {"genesis_nodes": ["node1", "node2"]})
+
+    with pytest.raises(AssertionError, match="Chi cost must be an integer"):
+        validators.propose_vote(type_of_vote="chi_cost_change", arg=rate, signer="node1")
+
+    assert validators.total_votes.get() == 0
+    assert client.get_contract_proxy("chi_cost").current_value() == 20
+
+
+def test_chi_cost_proposal_executes_integer_rates(client):
+    _, validators = _deploy_validators(client, {"genesis_nodes": ["node1", "node2"]})
+
+    validators.propose_vote(type_of_vote="chi_cost_change", arg=7, signer="node1")
+    validators.vote(proposal_id=1, vote="yes", signer="node2")
+
+    assert validators.get_vote(proposal_id=1)["status"] == "approved"
+    assert client.get_contract_proxy("chi_cost").current_value() == 7
+
+
 def test_validator_registration_requires_the_signing_account(client):
     currency, validators = _deploy_validators(client)
     client.submit(

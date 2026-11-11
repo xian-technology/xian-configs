@@ -464,6 +464,7 @@ unknown, negative, duplicate, or wrong-type values at proposal creation rather
 than deferring failure until finalization. Reward splits contain validator,
 burn, foundation, and developer ratios in that order. Individual ratios may be
 zero, but all four values must be numeric, non-negative, and sum to one.
+`chi_cost_change` requires a positive integer, matching `chi_cost.set_value`.
 
 The registration fee must remain positive because `register()` transfers that
 amount through `currency.transfer_from`, which rejects zero-value transfers.

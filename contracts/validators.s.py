@@ -1535,7 +1535,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         validate_non_empty_string(arg["to"], "DAO recipient")
 
     if type_of_vote == "chi_cost_change":
-        assert is_number(arg), "Chi cost must be numeric."
+        assert is_integer(arg), "Chi cost must be an integer."
         assert arg > 0, "Chi cost must be positive."
 
     if type_of_vote == "change_types":
