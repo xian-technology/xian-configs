@@ -16,7 +16,7 @@ TokenCreatedEvent = LogEvent(
 
 def resolve_controller(address: Any, field_name: str):
     if address is None or address == "":
-        return ctx.signer
+        return ctx.caller
 
     assert isinstance(address, str), field_name + " must be a string."
     assert address != "", field_name + " must be non-empty."

@@ -85,6 +85,13 @@ DEFAULT_SLASH_DESTINATION = "dao"
 DEFAULT_DUPLICATE_VOTE_SLASH_BPS = 500
 DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS = 1000
 SYSTEM_EVIDENCE_CALLER = "__evidence_penalty_driver__"
+# A single validator's power stays far below CometBFT's total limit, so even a
+# very large set cannot overflow consensus; the total is still checked.
+MAX_VALIDATOR_POWER = 1000000000000
+# CometBFT MaxTotalVotingPower: MaxInt64 / 8.
+MAX_TOTAL_VOTING_POWER = 1152921504606846975
+CANONICAL_KEY_LENGTH = 64
+CANONICAL_KEY_DIGITS = "0123456789abcdef"
 
 ValidatorProposalSubmittedEvent = LogEvent(
     "ValidatorProposalSubmitted",
@@ -234,6 +241,7 @@ def seed(
 
     active_nodes = []
     for node in genesis_nodes:
+        require_canonical_validator_key(node)
         if node in active_nodes:
             continue
 
@@ -257,7 +265,9 @@ def seed(
         powers[node] = requested_power[node]
         reward_keys[node] = resolve_reward_key(node, genesis_reward_keys)
 
+    assert len(active_nodes) > 0, "Genesis requires at least one validator."
     active_validators.set(active_nodes)
+    require_total_power_within_limit()
 
 
 def resolve_requested_power(
@@ -271,8 +281,7 @@ def resolve_requested_power(
         if configured_power is not None:
             power = configured_power
 
-    assert power > 0, "Validator power <= 0"
-    return power
+    return require_validator_power(power)
 
 
 def resolve_reward_key(account: str, configured_reward_keys: dict = None):
@@ -318,6 +327,28 @@ def normalize_jail_reason(reason: str = None):
 
 def is_integer(value: Any):
     return isinstance(value, int) and isinstance(value, bool) == False
+
+
+def is_canonical_validator_key(value: Any):
+    if not isinstance(value, str) or len(value) != CANONICAL_KEY_LENGTH:
+        return False
+    for character in value:
+        if character not in CANONICAL_KEY_DIGITS:
+            return False
+    return True
+
+
+def require_canonical_validator_key(value: Any):
+    assert is_canonical_validator_key(
+        value
+    ), "Validator key must be a canonical lowercase 64-hex key."
+
+
+def require_validator_power(power: Any):
+    assert is_integer(power), "Validator power must be an integer."
+    assert power > 0, "Validator power <= 0"
+    assert power <= MAX_VALIDATOR_POWER, "Validator power exceeds the maximum."
+    return power
 
 
 def is_number(value: Any):
@@ -837,11 +868,13 @@ def selected_validator_power(account: str):
         weighted_power = int(total_bonded(account))
         if weighted_power <= 0:
             return 1
+        if weighted_power > MAX_VALIDATOR_POWER:
+            return MAX_VALIDATOR_POWER
         return weighted_power
     return DEFAULT_VALIDATOR_POWER
 
 
-def approve_candidate(account: str):
+def approve_candidate(account: str, power: int):
     assert pending_registrations[account] == True, "Member must have pending registration."
     assert is_jailed(account) == False, "Jailed."
 
@@ -858,12 +891,12 @@ def approve_candidate(account: str):
 
     ensure_candidate(account)
 
-    requested_power[account] = effective_requested_power(account)
+    requested_power[account] = power
     reward_keys[account] = effective_reward_key(account)
     return validator_record(account)
 
 
-def rebalance_validator_set(force: bool = False):
+def rebalance_validator_set(force: bool = False, require_selection: bool = True):
     selection_mode = effective_selection_mode()
     assert selection_mode != "manual", "Auto selection disabled."
     selection_epoch = current_selection_epoch()
@@ -925,6 +958,21 @@ def rebalance_validator_set(force: bool = False):
             if replacement_budget <= 0:
                 break
 
+    if len(selected_accounts) == 0:
+        # An empty set would leave no members able to govern recovery.
+        assert require_selection == False, "Rebalance would leave no active validators."
+        last_rebalance_epoch.set(selection_epoch)
+        return {
+            "mode": selection_mode,
+            "epoch": selection_epoch,
+            "previous_active": previous_active,
+            "selected": previous_active,
+            "ranked_candidates": ranked_accounts,
+            "activated": [],
+            "deactivated": [],
+            "retained": True,
+        }
+
     activated = []
     for account in known_accounts:
         if account in selected_accounts:
@@ -954,6 +1002,7 @@ def rebalance_validator_set(force: bool = False):
     active_validators.set(selected_accounts)
     candidates.set(next_candidates)
     last_rebalance_epoch.set(selection_epoch)
+    require_total_power_within_limit()
 
     return {
         "mode": selection_mode,
@@ -963,6 +1012,7 @@ def rebalance_validator_set(force: bool = False):
         "ranked_candidates": ranked_accounts,
         "activated": activated,
         "deactivated": deactivated,
+        "retained": False,
     }
 
 
@@ -1042,6 +1092,23 @@ def total_member_weight_internal():
     return total
 
 
+def require_total_power_within_limit():
+    assert (
+        total_member_weight_internal() <= MAX_TOTAL_VOTING_POWER
+    ), "Total validator power exceeds the consensus maximum."
+
+
+def is_last_active_validator(account: str):
+    current_nodes = active_nodes_list()
+    return len(current_nodes) == 1 and account in current_nodes
+
+
+def require_not_last_active_validator(account: str):
+    assert (
+        is_last_active_validator(account) == False
+    ), "Cannot remove the last active validator."
+
+
 def required_yes_weight(total_weight: int):
     assert total_weight > 0, "No voting weight."
     return ceil_div(
@@ -1104,8 +1171,7 @@ def update_profile_fields(
         reward_keys[account] = normalize_reward_key(account, reward_key)
 
     if requested_validator_power is not None:
-        assert requested_validator_power > 0, "Validator power <= 0"
-        requested_power[account] = requested_validator_power
+        requested_power[account] = require_validator_power(requested_validator_power)
 
     if commission_bps_value is not None:
         assert commission_bps_value >= 0, "Commission < 0"
@@ -1125,7 +1191,7 @@ def update_profile_fields(
         metadata_uris[account] = metadata_uri
 
 
-def activate_member(account: str):
+def activate_member(account: str, power: int):
     track_validator(account)
     current_nodes = active_nodes_list()
     if account not in current_nodes:
@@ -1145,10 +1211,10 @@ def activate_member(account: str):
     if delegator_lists[account] is None:
         delegator_lists[account] = []
 
-    power = effective_requested_power(account)
     requested_power[account] = power
     powers[account] = power
     reward_keys[account] = effective_reward_key(account)
+    require_total_power_within_limit()
 
 
 def refund_validator_bond(account: str):
@@ -1399,13 +1465,18 @@ def apply_evidence_penalty_internal(
             )
             state_changed = True
 
-    if should_jail and is_jailed(account) == False and is_known_validator(account):
+    if (
+        should_jail
+        and is_jailed(account) == False
+        and is_known_validator(account)
+        and is_last_active_validator(account) == False
+    ):
         jail_validator(account, reason)
         jailed_now = True
         state_changed = True
 
     if state_changed and effective_selection_mode() != "manual":
-        rebalance_validator_set(force=True)
+        rebalance_validator_set(force=True, require_selection=False)
 
     return {
         "applied": state_changed,
@@ -1457,6 +1528,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         validate_non_empty_string(arg, "Member")
         validate_manual_override_policy(type_of_vote)
         assert arg in active_nodes_list(), "Active only."
+        require_not_last_active_validator(arg)
 
     if type_of_vote == "jail_member":
         validate_object_argument(arg, ["member", "reason"], ["member"])
@@ -1466,6 +1538,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         validate_optional_string(arg.get("reason"), "Reason")
         assert is_known_validator(member), "Unknown validator."
         assert is_jailed(member) == False, "Already jailed."
+        require_not_last_active_validator(member)
 
     if type_of_vote == "unjail_member":
         validate_non_empty_string(arg, "Member")
@@ -1506,6 +1579,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         assert is_integer(power), "Power must be an integer."
         assert member in active_nodes_list(), "Active only."
         assert power > 0, "Power <= 0"
+        require_validator_power(power)
 
     if type_of_vote == "update_policy":
         validate_policy_update(arg)
@@ -1773,6 +1847,12 @@ def propose_vote(type_of_vote: str, arg: Any):
             "status": STATUS_PENDING,
         }
     )
+    if type_of_vote == "add_member":
+        # Voters approve this power; later registration edits cannot change it.
+        current_vote = votes[proposal_id]
+        current_vote["member_power"] = effective_requested_power(arg)
+        votes[proposal_id] = current_vote
+
     store_vote_record(proposal_id, ctx.caller, "yes", proposer_weight)
     decide_finalize(proposal_id)
     return votes[proposal_id]
@@ -1802,7 +1882,7 @@ def vote(proposal_id: int, vote: str):
 
     store_vote_record(proposal_id, ctx.caller, vote, voter_weight)
     decide_finalize(proposal_id)
-    return current_vote
+    return votes[proposal_id]
 
 
 @export
@@ -1838,34 +1918,69 @@ def decide_finalize(proposal_id: int):
         - current_vote["no_weight"]
     )
     if current_vote["yes_weight"] + remaining_weight < current_vote["required_yes_weight"]:
-        current_vote["finalized"] = True
-        current_vote["status"] = STATUS_REJECTED
-        votes[proposal_id] = current_vote
-        ValidatorProposalRejectedEvent(
-            {
-                "proposal_id": proposal_id,
-                "type_of_vote": current_vote["type"],
-                "rejector": ctx.caller,
-                "status": STATUS_REJECTED,
-            }
-        )
+        reject_vote(proposal_id)
+
+
+def reject_vote(proposal_id: int):
+    current_vote = votes[proposal_id]
+    current_vote["finalized"] = True
+    current_vote["status"] = STATUS_REJECTED
+    votes[proposal_id] = current_vote
+    ValidatorProposalRejectedEvent(
+        {
+            "proposal_id": proposal_id,
+            "type_of_vote": current_vote["type"],
+            "rejector": ctx.caller,
+            "status": STATUS_REJECTED,
+        }
+    )
+
+
+def can_add_member(member: str):
+    if is_jailed(member):
+        return False
+    if pending_registrations[member] == True:
+        return True
+    return effective_selection_mode() == "manual" and statuses[member] == STATUS_APPROVED
+
+
+def can_jail_member(member: str):
+    return (
+        is_known_validator(member)
+        and is_jailed(member) == False
+        and is_last_active_validator(member) == False
+    )
+
+
+def can_remove_member(member: str):
+    return member in active_nodes_list() and is_last_active_validator(member) == False
+
+
+def proposal_still_applies(current_vote: dict):
+    # Validator state may change between proposal and finalization.
+    vote_type = current_vote["type"]
+    if vote_type == "add_member":
+        return can_add_member(current_vote["arg"])
+    if vote_type == "remove_member":
+        return can_remove_member(current_vote["arg"])
+    if vote_type == "jail_member":
+        return can_jail_member(current_vote["arg"]["member"])
+    return True
 
 
 def finalize_vote(proposal_id: int):
     current_vote = votes[proposal_id]
+    if proposal_still_applies(current_vote) == False:
+        reject_vote(proposal_id)
+        return votes[proposal_id]
 
     if current_vote["type"] == "add_member":
         member = current_vote["arg"]
+        member_power = current_vote["member_power"]
         if effective_selection_mode() == "manual":
-            assert (
-                pending_registrations[member] == True or statuses[member] == STATUS_APPROVED
-            ), "Member must have pending registration."
+            activate_member(member, member_power)
         else:
-            assert pending_registrations[member] == True, "Member must have pending registration."
-        if effective_selection_mode() == "manual":
-            activate_member(member)
-        else:
-            approve_candidate(member)
+            approve_candidate(member, member_power)
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "remove_member":
         exit_validator(current_vote["arg"], STATUS_REMOVED, True)
@@ -1897,6 +2012,7 @@ def finalize_vote(proposal_id: int):
         requested_power[member] = power
         if effective_selection_mode() == "manual":
             powers[member] = power
+            require_total_power_within_limit()
         elif effective_power_mode() == "requested":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "update_policy":
@@ -2062,7 +2178,7 @@ def total_member_weight():
 
 @export
 def rebalance():
-    return rebalance_validator_set()
+    return rebalance_validator_set(require_selection=False)
 
 
 @export
@@ -2153,6 +2269,7 @@ def leave():
     pending_leave_at = pending_leave[ctx.caller]
     assert pending_leave_at, "Not pending."
     assert pending_leave_at < now, "Leave announcement period not over."
+    require_not_last_active_validator(ctx.caller)
 
     exit_validator(ctx.caller, STATUS_LEFT, True)
     return validator_record(ctx.caller)
@@ -2179,6 +2296,8 @@ def register(
     # The registering identity becomes the validator's consensus key, so it
     # must be the signing account itself, never a contract acting for it.
     assert ctx.caller == ctx.signer, "Validators must register from their own account."
+    # Hex case variants verify with the same key; only one spelling may register.
+    require_canonical_validator_key(ctx.caller)
     assert ctx.caller not in active_nodes_list(), "Already a node."
     assert pending_registrations[ctx.caller] == False, "Already pending."
     assert requested_validator_power > 0, "Validator power <= 0"

@@ -175,6 +175,11 @@ remain distinct from validator self-bond used for delegation math.
 `register(...)` creates a validator candidate entry and locks the registration
 bond. Registration does not make a validator active by itself.
 
+The validator account key is the signing account and becomes the CometBFT
+consensus key. It must be the canonical lowercase 64-hex public key: hex-case
+variants verify with the same key but are distinct account strings, so
+`register()` and genesis `genesis_nodes` reject anything else.
+
 Validators provide:
 
 - validator account key
@@ -187,7 +192,11 @@ Validators provide:
 
 ### Activation
 
-- `manual`: activation happens through governance.
+- `manual`: activation happens through governance. An `add_member` proposal
+  records the candidate's requested power (default `10`) when it is created as
+  `member_power`; activation uses that value even if the candidate edits its
+  registration while the vote is open. Later changes go through
+  `set_member_power`.
 - `auto_top_n`: activation happens through epoch rebalance when the validator is
   eligible and ranked in the top `N`.
 - `hybrid`: governance approves eligibility, epoch rebalance chooses top `N`.
@@ -200,6 +209,11 @@ automatic rebalances; jail, bond eligibility, and stake ranking can still make
 the validator inactive. `leave()` removes the validator from the active set, zeroes active voting power, refunds
 the registration bond, and starts release of self-bond and delegations through
 the unbonding flow.
+
+The last active validator cannot leave. Governance cannot remove or jail it, and
+a rebalance requested by governance that would select nobody is rejected. Epoch
+and evidence-triggered rebalances that would select nobody keep the current set.
+An empty set would leave no member able to propose recovery votes.
 
 ### Removal
 
@@ -221,6 +235,13 @@ The current contract uses governance-controlled `jail_member` and
 an approved candidate state and a later `add_member` vote reactivates it. In
 automatic modes, unjailing is followed by a forced rebalance so the validator
 can re-enter the active set if it is otherwise eligible.
+
+Validator state can change while a vote is open. `add_member`, `remove_member`
+and `jail_member` proposals are re-checked at finalization; a proposal whose
+target is no longer eligible (jailed candidate, already removed member, already
+jailed member, or the last active validator) is finalized as `rejected` without
+side effects. Evidence still slashes the last active validator but does not
+jail it.
 
 ### Slashing
 
@@ -409,7 +430,14 @@ Selection output:
 - `requested`
   Each active validator receives its configured `requested_power`.
 - `stake_weighted`
-  Reserved for a later phase.
+  Each active validator receives its integer total bond as power.
+
+A single validator's power is capped at `10^12` (`MAX_VALIDATOR_POWER`):
+requested power at registration, `update_registration`, genesis powers and
+`set_member_power` reject larger values, and stake-weighted power is clamped.
+Every power change also checks that the active total stays within CometBFT's
+`MaxTotalVotingPower` (`MaxInt64 / 8`), so no selection can produce a validator
+update that consensus rejects.
 
 The recommended rollout mode is `equal`.
 
@@ -513,7 +541,9 @@ Governance vote types should eventually include:
 
 ## Invariants
 
-- `active_validators` contains no duplicates.
+- `active_validators` contains no duplicates and is never empty.
+- `0 < powers[v] <= 10^12` for active validators, and their sum stays within
+  CometBFT `MaxTotalVotingPower`.
 - Every active validator has `status == active`.
 - No jailed validator appears in `active_validators`.
 - `powers[v] == 0` for inactive validators.
