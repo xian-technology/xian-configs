@@ -8,7 +8,7 @@ def require_control_contract():
 
 def is_number(value: Any):
     return (
-        isinstance(value, (int, float, decimal))
+        isinstance(value, (int, decimal))
         and isinstance(value, bool) == False
     )
 

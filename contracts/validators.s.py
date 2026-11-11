@@ -322,7 +322,7 @@ def is_integer(value: Any):
 
 def is_number(value: Any):
     return (
-        isinstance(value, (int, float, decimal))
+        isinstance(value, (int, decimal))
         and isinstance(value, bool) == False
     )
 
@@ -641,7 +641,7 @@ def track_validator(account: str):
 def create_pending_unbond(
     owner: str,
     validator: str,
-    amount: float,
+    amount: decimal,
     kind: str,
     reason: str = None,
 ):
@@ -2244,7 +2244,7 @@ def unregister():
 
 
 @export
-def bond_self(amount: float):
+def bond_self(amount: decimal):
     assert amount > 0, "Bond amount <= 0"
     assert can_accept_delegation(ctx.caller), "Bonding closed."
 
@@ -2258,7 +2258,7 @@ def bond_self(amount: float):
 
 
 @export
-def unbond_self(amount: float):
+def unbond_self(amount: decimal):
     assert amount > 0, "Bond amount <= 0"
     assert self_bond[ctx.caller] >= amount, "Not enough self bond."
 
@@ -2272,7 +2272,7 @@ def unbond_self(amount: float):
 
 
 @export
-def delegate(validator: str, amount: float, reward_key: str = None):
+def delegate(validator: str, amount: decimal, reward_key: str = None):
     assert amount > 0, "Delegation amount <= 0"
     assert validator != ctx.caller, "Use bond_self."
     assert can_accept_delegation(validator), "Closed."
@@ -2298,7 +2298,7 @@ def delegate(validator: str, amount: float, reward_key: str = None):
 
 
 @export
-def undelegate(validator: str, amount: float):
+def undelegate(validator: str, amount: decimal):
     assert amount > 0, "Delegation amount <= 0"
     assert delegations[ctx.caller, validator] >= amount, "Not enough delegated stake."
 

@@ -8,7 +8,7 @@ TokenCreatedEvent = LogEvent(
         "operator": indexed(str),
         "initial_holder": str,
         "token_symbol": str,
-        "initial_supply": (int, float, decimal),
+        "initial_supply": (int, decimal),
     },
 )
 
@@ -42,7 +42,7 @@ def create_token(
     assert isinstance(token_contract, str) and token_contract != "", "token_contract must be non-empty."
     assert isinstance(token_name, str) and token_name != "", "token_name must be non-empty."
     assert isinstance(token_symbol, str) and token_symbol != "", "token_symbol must be non-empty."
-    assert isinstance(initial_supply, (int, float, decimal)), "initial_supply must be numeric."
+    assert isinstance(initial_supply, (int, decimal)), "initial_supply must be numeric."
     assert initial_supply >= 0, "initial_supply must be non-negative."
 
     if token_logo_url is None:

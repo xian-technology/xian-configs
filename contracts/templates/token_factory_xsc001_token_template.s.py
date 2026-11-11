@@ -8,7 +8,7 @@ TransferEvent = LogEvent(
     {
         "from": indexed(str),
         "to": indexed(str),
-        "amount": (int, float, decimal),
+        "amount": (int, decimal),
     },
 )
 ApproveEvent = LogEvent(
@@ -16,7 +16,7 @@ ApproveEvent = LogEvent(
     {
         "from": indexed(str),
         "to": indexed(str),
-        "amount": (int, float, decimal),
+        "amount": (int, decimal),
     },
 )
 
@@ -41,7 +41,7 @@ def seed(
     assert isinstance(token_logo_url, str), "token_logo_url must be a string."
     assert isinstance(token_logo_svg, str), "token_logo_svg must be a string."
     assert isinstance(token_website, str), "token_website must be a string."
-    assert isinstance(initial_supply, (int, float, decimal)), (
+    assert isinstance(initial_supply, (int, decimal)), (
         "initial_supply must be numeric."
     )
     assert initial_supply >= 0, "initial_supply must be non-negative."
@@ -87,7 +87,7 @@ def balance_of(address: str):
 
 
 @export
-def transfer(amount: float, to: str):
+def transfer(amount: decimal, to: str):
     assert amount > 0, "Cannot send negative balances!"
     assert balances[ctx.caller] >= amount, "Not enough coins to send!"
     balances[ctx.caller] -= amount
@@ -96,14 +96,14 @@ def transfer(amount: float, to: str):
 
 
 @export
-def approve(amount: float, to: str):
+def approve(amount: decimal, to: str):
     assert amount >= 0, "Cannot approve negative balances!"
     approvals[ctx.caller, to] = amount
     ApproveEvent({"from": ctx.caller, "to": to, "amount": amount})
 
 
 @export
-def transfer_from(amount: float, to: str, main_account: str):
+def transfer_from(amount: decimal, to: str, main_account: str):
     assert amount > 0, "Cannot send negative balances!"
     assert approvals[main_account, ctx.caller] >= amount, (
         f"Not enough coins approved to send! "

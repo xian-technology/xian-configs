@@ -4,7 +4,11 @@ from __future__ import annotations
 import hashlib
 import json
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from pathlib import Path
+
+from xian_runtime_types.decimal import ContractingDecimal, canonical_fixed
+from xian_runtime_types.numeric_wire import decode_wire_numbers
 
 from generate_token_factory_artifacts import verify_token_factory_artifacts
 
@@ -188,6 +192,16 @@ def validate_explicit_genesis_key_maps(
         )
 
 
+def genesis_amount(value, label: str) -> Fraction:
+    try:
+        amount = decode_wire_numbers(value)
+        if type(amount) is int or isinstance(amount, ContractingDecimal):
+            return Fraction(canonical_fixed(amount))
+    except (TypeError, ValueError, OverflowError):
+        pass
+    raise SystemExit(f"{label} must be an integer or a canonical fixed decimal")
+
+
 def validate_rewards_config(
     *,
     label: str,
@@ -199,22 +213,16 @@ def validate_rewards_config(
     if not isinstance(rewards_args, dict):
         raise SystemExit(f"{label} must pin rewards constructor_args in {bundle_path}")
     reward_split = rewards_args.get("initial_split")
-    if (
-        not isinstance(reward_split, list)
-        or len(reward_split) != 4
-        or any(
-            isinstance(item, bool) or not isinstance(item, (int, float))
-            for item in reward_split
-        )
-    ):
+    if not isinstance(reward_split, list) or len(reward_split) != 4:
         raise SystemExit(
             f"{label} rewards initial_split must be a 4-item numeric list in {bundle_path}"
         )
-    if any(item < 0 for item in reward_split):
+    amounts = [genesis_amount(value, f"{label} reward split") for value in reward_split]
+    if any(item < 0 for item in amounts):
         raise SystemExit(
             f"{label} rewards initial_split must contain only non-negative values in {bundle_path}"
         )
-    if abs(sum(reward_split) - 1) > 1e-9:
+    if sum(amounts) != 1:
         raise SystemExit(
             f"{label} rewards initial_split must sum to 1 in {bundle_path}"
         )
@@ -366,11 +374,7 @@ def validate_contract_bundles() -> None:
             )
 
         registration_fee = constructor_args["genesis_registration_fee"]
-        if (
-            isinstance(registration_fee, bool)
-            or not isinstance(registration_fee, (int, float))
-            or registration_fee <= 0
-        ):
+        if genesis_amount(registration_fee, "genesis_registration_fee") <= 0:
             raise SystemExit(
                 f"validators genesis_registration_fee must be positive in {bundle_path}"
             )

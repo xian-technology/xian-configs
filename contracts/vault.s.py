@@ -22,7 +22,7 @@ def seed(initial_owners: str, initial_required_signatures: int):
     transaction_count.set(0)
 
 @export
-def submit_transaction(to: str = None, amount: float = None, tx_type: str = 'transfer'):
+def submit_transaction(to: str = None, amount: decimal = None, tx_type: str = 'transfer'):
     """
     Submits a new transaction to the multisig wallet.
     - to: Recipient address.

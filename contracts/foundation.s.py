@@ -7,7 +7,7 @@ def seed(vk: str):
     owner.set(vk)
 
 @export
-def withdraw(amount: float):
+def withdraw(amount: decimal):
     assert amount > 0, 'Cannot send negative balances!'
     assert ctx.caller == owner.get(), 'Not owner!'
     currency.transfer(amount, ctx.caller)
