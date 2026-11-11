@@ -194,8 +194,10 @@ Validators provide:
 
 ### Leaving
 
-Validators announce leave first, then leave after the configured delay. Leaving
-removes the validator from the active set, zeroes active voting power, refunds
+Validators announce leave first, then leave after the configured delay. An
+announcement preserves active membership and the pending leave deadline during
+automatic rebalances; jail, bond eligibility, and stake ranking can still make
+the validator inactive. `leave()` removes the validator from the active set, zeroes active voting power, refunds
 the registration bond, and starts release of self-bond and delegations through
 the unbonding flow.
 
@@ -242,7 +244,11 @@ Current semantics:
   or equal to that infraction height
 - registration bonds are not slashable
 - slash application is pro-rata across all slashable stake in scope for that
-  call
+  call, using cumulative proportional targets at the VM's 30-place fixed
+  precision; each participant pays the difference between successive targets
+  so debits conserve the total and never exceed the participant's stake
+- a total slash that rounds to zero records the penalty without a zero-value
+  currency transfer
 - the slashed amount is transferred to `config["slash_destination"]`
 
 Because the current `currency` contract has no native burn entrypoint, the

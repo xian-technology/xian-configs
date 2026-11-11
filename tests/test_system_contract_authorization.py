@@ -1,8 +1,9 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN, localcontext
 from pathlib import Path
 
 import pytest
 from contracting.local import ContractingClient
+from xian_runtime_types.time import Datetime
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,7 +150,7 @@ def test_rewards_seed_validates_the_initial_split(client):
         )
 
 
-def _deploy_validators(client):
+def _deploy_validators(client, constructor_args=None):
     submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
     submit_contract(client, "dao", "dao.s.py")
     submit_contract(client, "rewards", "rewards.s.py")
@@ -158,7 +159,11 @@ def _deploy_validators(client):
         client,
         "validators",
         "validators.s.py",
-        {"genesis_nodes": ["node1"], "genesis_registration_fee": 1000},
+        {
+            "genesis_nodes": ["node1"],
+            "genesis_registration_fee": 1000,
+            **(constructor_args or {}),
+        },
     )
     return client.get_contract_proxy("currency"), validators
 
@@ -183,3 +188,302 @@ def test_validator_registration_requires_the_signing_account(client):
     currency.approve(amount=1000, to="validators", signer="alice")
     validators.register(signer="alice")
     assert client.raw_driver.get("validators.pending_registrations:alice") is True
+
+
+def test_automatic_selection_keeps_announced_validator_until_leave(client):
+    _, validators = _deploy_validators(
+        client,
+        {"genesis_nodes": ["node1", "node2"], "selection_mode": "auto_top_n"},
+    )
+    validators.announce_leave(
+        signer="node1",
+        environment={"now": Datetime(2026, 1, 1), "block_num": 1},
+    )
+
+    validators.rebalance(
+        signer="node2",
+        environment={"now": Datetime(2026, 1, 2), "block_num": 2},
+    )
+    assert validators.get_members() == ["node1", "node2"]
+    assert validators.get_validator(account="node1")["status"] == "leaving"
+
+    validators.leave(
+        signer="node1",
+        environment={"now": Datetime(2026, 1, 9), "block_num": 3},
+    )
+    validators.rebalance(
+        signer="node2",
+        environment={"now": Datetime(2026, 1, 9), "block_num": 4},
+    )
+    assert validators.get_members() == ["node2"]
+    assert validators.get_validator(account="node1")["status"] == "left"
+
+
+@pytest.mark.parametrize("required", [0, -1, 3])
+def test_vault_seed_requires_attainable_positive_quorum(client, required):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    with pytest.raises(AssertionError, match="Requirement"):
+        submit_contract(
+            client,
+            "team_lock",
+            "vault.s.py",
+            {"initial_owners": "alice,bob", "initial_required_signatures": required},
+        )
+
+
+def test_vault_cannot_remove_last_owner(client):
+    currency = submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice", "initial_required_signatures": 1},
+    )
+    vault.submit_transaction(to="alice", tx_type="removeOwner", signer="alice")
+    with pytest.raises(AssertionError, match="last owner"):
+        vault.execute_transaction(tx_id=1, signer="alice")
+
+    assert vault.owner_count.get() == 1
+    assert vault.required_signatures.get() == 1
+    assert vault.owners["alice"] is True
+    vault.submit_transaction(to="alice", amount=1, signer="alice")
+    vault.execute_transaction(tx_id=2, signer="alice")
+    assert currency.balance_of(address="alice") == 1
+
+
+@pytest.mark.parametrize("owners", ["", "alice,alice", "alice, ,bob"])
+def test_vault_seed_requires_distinct_nonempty_owners(client, owners):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    with pytest.raises(AssertionError, match="owner"):
+        submit_contract(
+            client,
+            "team_lock",
+            "vault.s.py",
+            {"initial_owners": owners, "initial_required_signatures": 1},
+        )
+
+
+@pytest.mark.parametrize(
+    "stake_amounts,slash_bps",
+    [
+        (["1e-30", "1e-30", "1e-30", "1e-30"], 5000),
+        (["1e-30", "2e-30", "3e-30", "1e-30"], 5000),
+        (["1e-30", "1e-30", "2e-30", "3e-30"], 10000),
+        (["1e-30", "1e-30", "1e-30", "1e-30"], 1),
+        (["100", "900", "125", "0.5"], 500),
+        (["100", "1e-30", "2e-30", "1"], 3333),
+    ],
+    ids=["tiny", "uneven", "full-slash", "rounded-zero", "normal", "mixed"],
+)
+def test_slashing_keeps_nonnegative_balances_and_conserves_value(client, stake_amounts, slash_bps):
+    currency, validators = _deploy_validators(client)
+    amounts = [Decimal(amount) for amount in stake_amounts]
+    for account, amount in zip(["node1", "alice", "bob", "carol"], amounts):
+        currency.transfer(amount=amount, to=account, signer="founder")
+        currency.approve(amount=amount, to="validators", signer=account)
+        if account == "node1":
+            validators.bond_self(amount=amount, signer=account)
+        else:
+            validators.delegate(validator="node1", amount=amount, signer=account)
+
+    proposal = validators.propose_vote(
+        type_of_vote="slash_member",
+        arg={"member": "node1", "slash_bps": slash_bps},
+        signer="node1",
+    )
+    assert proposal["status"] == "approved"
+    remaining = [validators.get_validator(account="node1")["self_bond"]]
+    for delegator in ["alice", "bob", "carol"]:
+        remaining.append(
+            validators.get_delegation(delegator=delegator, validator="node1")["amount"]
+        )
+    assert all(amount >= 0 for amount in remaining)
+    assert all(after <= before for before, after in zip(amounts, remaining))
+    with localcontext() as context:
+        context.prec = 100
+        expected_slash = (sum(amounts) * slash_bps / 10000).quantize(
+            Decimal("1e-30"), rounding=ROUND_DOWN
+        )
+        assert proposal["result"]["slash_amount"] == expected_slash
+        assert sum(remaining) == sum(amounts) - expected_slash
+    assert currency.balance_of(address="validators") == sum(remaining)
+
+
+def test_state_patch_votes_reject_passed_activation_height(client):
+    _deploy_validators(client, {"genesis_nodes": ["node1", "node2"]})
+    governance = submit_contract(
+        client,
+        "governance",
+        "governance.s.py",
+        {
+            "membership_contract_name": "validators",
+            "approval_threshold_numerator": 1,
+            "approval_threshold_denominator": 1,
+            "min_patch_delay_blocks": 2,
+        },
+    )
+    governance.propose_state_patch(
+        patch_id="late-patch",
+        bundle_hash="abc123",
+        activation_height=12,
+        signer="node1",
+        environment={"now": Datetime(2026, 1, 1), "block_num": 10},
+    )
+    with pytest.raises(AssertionError, match="activation height"):
+        governance.vote(
+            proposal_id=1,
+            support=True,
+            signer="node2",
+            environment={"now": Datetime(2026, 1, 1), "block_num": 13},
+        )
+
+    proposal = governance.get_proposal(proposal_id=1)
+    assert proposal["status"] == "pending"
+    assert proposal["yes_votes"] == 1
+    assert governance.get_patch(patch_id="late-patch")["status"] == "proposed"
+    assert client.raw_driver.get("governance.scheduled_patches:12:late-patch") is None
+
+
+@pytest.mark.parametrize("vote_height", [11, 12])
+def test_state_patch_can_be_approved_through_activation_height(client, vote_height):
+    _deploy_validators(client, {"genesis_nodes": ["node1", "node2"]})
+    governance = submit_contract(
+        client,
+        "governance",
+        "governance.s.py",
+        {
+            "membership_contract_name": "validators",
+            "approval_threshold_numerator": 1,
+            "approval_threshold_denominator": 1,
+            "min_patch_delay_blocks": 2,
+        },
+    )
+    governance.propose_state_patch(
+        patch_id="on-time-patch",
+        bundle_hash="abc123",
+        activation_height=12,
+        signer="node1",
+        environment={"now": Datetime(2026, 1, 1), "block_num": 10},
+    )
+    proposal = governance.vote(
+        proposal_id=1,
+        support=True,
+        signer="node2",
+        environment={"now": Datetime(2026, 1, 1), "block_num": vote_height},
+    )
+    assert proposal["status"] == "approved"
+    assert governance.get_patch(patch_id="on-time-patch")["status"] == "approved"
+    assert client.raw_driver.get("governance.scheduled_patches:12:on-time-patch") is True
+
+
+def test_vault_counts_only_current_owners_toward_transaction_quorum(client):
+    currency = submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice,bob,carol", "initial_required_signatures": 2},
+    )
+    vault.submit_transaction(to="recipient", amount=100, signer="alice")
+    vault.approve_transaction(tx_id=1, signer="bob")
+    vault.submit_transaction(to="bob", tx_type="removeOwner", signer="alice")
+    vault.approve_transaction(tx_id=2, signer="carol")
+    vault.execute_transaction(tx_id=2, signer="alice")
+
+    with pytest.raises(AssertionError, match="Not enough approvals"):
+        vault.execute_transaction(tx_id=1, signer="alice")
+    assert currency.balance_of(address="recipient") == 0
+    assert vault.transactions[1, "executed"] is False
+
+    vault.approve_transaction(tx_id=1, signer="carol")
+    vault.execute_transaction(tx_id=1, signer="alice")
+    assert currency.balance_of(address="recipient") == 100
+
+
+def test_vault_approvals_and_execution_are_single_use(client):
+    currency = submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice,bob", "initial_required_signatures": 2},
+    )
+    vault.submit_transaction(to="recipient", amount=100, signer="alice")
+    vault.approve_transaction(tx_id=1, signer="bob")
+    assert vault.transactions[1, "approvals"] == 2
+    assert vault.transactions[1, "approvers", "alice"] is True
+    assert vault.transactions[1, "approvers", "bob"] is True
+    with pytest.raises(AssertionError, match="Already approved"):
+        vault.approve_transaction(tx_id=1, signer="bob")
+    vault.execute_transaction(tx_id=1, signer="alice")
+    assert vault.transactions[1, "executed"] is True
+    with pytest.raises(AssertionError, match="already executed"):
+        vault.execute_transaction(tx_id=1, signer="alice")
+    assert currency.balance_of(address="recipient") == 100
+
+
+def test_vault_owner_changes_keep_count_and_quorum_consistent(client):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice,bob", "initial_required_signatures": 2},
+    )
+    vault.submit_transaction(to="carol", tx_type="addOwner", signer="alice")
+    vault.approve_transaction(tx_id=1, signer="bob")
+    vault.execute_transaction(tx_id=1, signer="alice")
+    assert vault.owners["carol"] is True
+    assert vault.owner_count.get() == 3
+    vault.submit_transaction(to="carol", tx_type="addOwner", signer="alice")
+    vault.approve_transaction(tx_id=2, signer="bob")
+    with pytest.raises(AssertionError, match="already an owner"):
+        vault.execute_transaction(tx_id=2, signer="alice")
+
+    vault.submit_transaction(to="bob", tx_type="removeOwner", signer="alice")
+    vault.approve_transaction(tx_id=3, signer="carol")
+    vault.execute_transaction(tx_id=3, signer="alice")
+    assert vault.owner_count.get() == 2
+    vault.submit_transaction(to="carol", tx_type="removeOwner", signer="alice")
+    vault.approve_transaction(tx_id=4, signer="carol")
+    vault.execute_transaction(tx_id=4, signer="alice")
+    assert vault.owner_count.get() == 1
+    assert vault.required_signatures.get() == 1
+    with pytest.raises(AssertionError, match="Only owners"):
+        vault.submit_transaction(to="bob", amount=1, signer="carol")
+
+
+@pytest.mark.parametrize("requirement,allowed", [(0, False), (1, True), (2, True), (3, False)])
+def test_vault_quorum_changes_require_positive_attainable_value(client, requirement, allowed):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice,bob", "initial_required_signatures": 2},
+    )
+    vault.submit_transaction(amount=requirement, tx_type="changeRequirement", signer="alice")
+    vault.approve_transaction(tx_id=1, signer="bob")
+    if allowed:
+        vault.execute_transaction(tx_id=1, signer="alice")
+        assert vault.required_signatures.get() == requirement
+    else:
+        with pytest.raises(AssertionError, match="Requirement"):
+            vault.execute_transaction(tx_id=1, signer="alice")
+        assert vault.required_signatures.get() == 2
+
+
+@pytest.mark.parametrize("new_owner", ["", " ", "\t"])
+def test_vault_cannot_add_empty_owner(client, new_owner):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice", "initial_required_signatures": 1},
+    )
+    vault.submit_transaction(to=new_owner, tx_type="addOwner", signer="alice")
+    with pytest.raises(AssertionError, match="owner"):
+        vault.execute_transaction(tx_id=1, signer="alice")
+    assert vault.owner_count.get() == 1
+    assert vault.required_signatures.get() == 1

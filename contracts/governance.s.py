@@ -226,6 +226,10 @@ def require_open_proposal(proposal_id: int):
         proposals[proposal_id, "status"] == STATUS_PENDING
     ), "Proposal is not open."
     assert now < proposals[proposal_id, "expires_at"], "Proposal expired."
+    if proposals[proposal_id, "kind"] == KIND_STATE_PATCH:
+        assert block_num <= proposals[proposal_id, "activation_height"], (
+            "Patch activation height has passed; submit a new proposal."
+        )
 
 
 def initialize_proposal(proposal_id: int, kind: str, summary: str, emergency: bool):

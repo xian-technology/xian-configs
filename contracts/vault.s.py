@@ -6,6 +6,13 @@ owner_count = Variable()
 transaction_count = Variable()
 transactions = Hash()
 
+def normalize_owner(owner: str):
+    assert isinstance(owner, str), 'An owner must be a string.'
+    owner = owner.strip()
+    assert owner != '', 'An owner must be non-empty.'
+    return owner
+
+
 @construct
 def seed(initial_owners: str, initial_required_signatures: int):
     """
@@ -13,9 +20,16 @@ def seed(initial_owners: str, initial_required_signatures: int):
     - initial_owners: Comma-separated string of owner addresses.
     - initial_required_signatures: Number of required signatures to execute a transaction.
     """
-    owner_list = initial_owners.split(',')
+    owner_list = []
+    for owner in initial_owners.split(','):
+        owner = normalize_owner(owner)
+        assert owner not in owner_list, 'Duplicate owner.'
+        owner_list.append(owner)
+
+    assert initial_required_signatures > 0, 'Requirement must be greater than zero.'
+    assert initial_required_signatures <= len(owner_list), 'Requirement cannot be greater than number of owners.'
     for owner in owner_list:
-        owners[owner.strip()] = True
+        owners[owner] = True
 
     required_signatures.set(initial_required_signatures)
     owner_count.set(len(owner_list))
@@ -39,6 +53,7 @@ def submit_transaction(to: str = None, amount: decimal = None, tx_type: str = 't
     transactions[tx_id, 'amount'] = amount
     transactions[tx_id, 'executed'] = False
     transactions[tx_id, 'approvals'] = 0
+    transactions[tx_id, 'approver_list'] = []
 
     # The submitter approves the transaction by default
     approve_transaction(tx_id)
@@ -57,6 +72,9 @@ def approve_transaction(tx_id: int):
     assert not transactions[tx_id, 'approvers', ctx.caller], 'Already approved.'
 
     transactions[tx_id, 'approvers', ctx.caller] = True
+    approvers = transactions[tx_id, 'approver_list']
+    approvers.append(ctx.caller)
+    transactions[tx_id, 'approver_list'] = approvers
     transactions[tx_id, 'approvals'] += 1
 
     return f"Transaction {tx_id} approved by {ctx.caller}."
@@ -70,7 +88,10 @@ def execute_transaction(tx_id: int):
     assert owners[ctx.caller], 'Only owners can execute transactions.'
     assert not transactions[tx_id, 'executed'], 'Transaction already executed.'
     assert transactions[tx_id, 'type'] is not None, 'Transaction does not exist.'
-    approvals = transactions[tx_id, 'approvals']
+    approvals = 0
+    for approver in transactions[tx_id, 'approver_list']:
+        if owners[approver]:
+            approvals += 1
     required = required_signatures.get()
     assert approvals >= required, 'Not enough approvals.'
 
@@ -81,17 +102,17 @@ def execute_transaction(tx_id: int):
     if tx_type == 'transfer':
         currency.transfer(amount=amount, to=to)
     elif tx_type == 'addOwner':
-        assert to is not None, 'No owner specified to add.'
+        to = normalize_owner(to)
         assert not owners[to], 'Address is already an owner.'
         owners[to] = True
         owner_count.set(owner_count.get() + 1)
     elif tx_type == 'removeOwner':
-        assert to is not None, 'No owner specified to remove.'
+        to = normalize_owner(to)
         assert owners[to], 'Address is not an owner.'
+        assert owner_count.get() > 1, 'Cannot remove the last owner.'
         owners[to] = False
         owner_count.set(owner_count.get() - 1)
-        if required_signatures.get() > owner_count.get():
-            required_signatures.set(owner_count.get())
+        required_signatures.set(min(required_signatures.get(), owner_count.get()))
     elif tx_type == 'changeRequirement':
         assert amount is not None, 'No new requirement specified.'
         new_requirement = int(amount)

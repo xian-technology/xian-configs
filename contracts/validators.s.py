@@ -745,14 +745,14 @@ def ready_for_selection(account: str, selection_epoch: int):
 def can_be_selected(account: str, selection_mode: str, selection_epoch: int):
     if is_jailed(account):
         return False
-    if pending_leave[account]:
-        return False
     if self_bond[account] < effective_min_self_bond():
         return False
     if total_bonded(account) < effective_min_total_bond():
         return False
 
     status = statuses[account]
+    if pending_leave[account]:
+        return status == STATUS_LEAVING and account in active_nodes_list()
     if status == STATUS_ACTIVE or status == STATUS_APPROVED:
         if status == STATUS_ACTIVE:
             return True
@@ -932,8 +932,8 @@ def rebalance_validator_set(force: bool = False):
                 activated.append(account)
                 joined_at[account] = now
             pending_registrations[account] = False
-            pending_leave[account] = False
-            statuses[account] = STATUS_ACTIVE
+            if not pending_leave[account]:
+                statuses[account] = STATUS_ACTIVE
             left_at[account] = None
             eligible_at_epoch[account] = selection_epoch
             reward_keys[account] = effective_reward_key(account)
@@ -1293,28 +1293,25 @@ def slash_validator(
     )
     assert total_slashable_bond > 0, "No slashable stake."
 
-    slash_amount = (total_slashable_bond * slash_bps) / 10000
-    remaining_slash = slash_amount
+    slash_rate = slash_bps / 10000
+    slash_amount = total_slashable_bond * slash_rate
+    processed_bond = 0
+    allocated_slash = 0
     self_bond_slashed = 0
     delegated_slashed = 0
     pending_unbond_slashed = 0
 
-    slash_participant_count = len(slash_participants)
-    slash_participant_index = 0
-
+    # Differences of cumulative targets conserve the slash without charging
+    # a final participant more than their stake when tiny products round to zero.
     for participant in slash_participants:
-        if slash_participant_index == slash_participant_count - 1:
-            participant_slash = remaining_slash
-        else:
-            participant_slash = (
-                slash_amount * participant["amount"]
-            ) / total_slashable_bond
-            remaining_slash = remaining_slash - participant_slash
+        processed_bond += participant["amount"]
+        cumulative_slash = processed_bond * slash_rate
+        participant_slash = cumulative_slash - allocated_slash
+        allocated_slash = cumulative_slash
 
         if participant["kind"] == "self_bond":
             self_bond[account] = self_bond[account] - participant_slash
             self_bond_slashed = participant_slash
-            slash_participant_index += 1
             continue
 
         if participant["kind"] == "pending_unbond":
@@ -1323,7 +1320,6 @@ def slash_validator(
             pending_unbond["amount"] = pending_unbond["amount"] - participant_slash
             pending_unbonds[unbond_id] = pending_unbond
             pending_unbond_slashed += participant_slash
-            slash_participant_index += 1
             continue
 
         delegator = participant["owner"]
@@ -1335,13 +1331,12 @@ def slash_validator(
         if delegations[delegator, account] == 0:
             remove_delegator(account, delegator)
 
-        slash_participant_index += 1
-
     total_slashed[account] = total_slashed[account] + slash_amount
     last_slashed_at[account] = now
 
     slash_destination = effective_slash_destination()
-    currency.transfer(slash_amount, slash_destination)
+    if slash_amount > 0:
+        currency.transfer(slash_amount, slash_destination)
 
     return {
         "member": account,
