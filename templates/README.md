@@ -6,7 +6,7 @@
 
 ## Contents
 - one JSON file per template
-- network defaults such as block policy and tracer mode
+- network defaults such as block policy
 - node execution defaults such as speculative parallel execution
 - bootstrap profile defaults such as BDS, dashboard, and monitoring behavior
 - operator intent metadata such as `operator_profile` and
@@ -41,7 +41,7 @@
 - Treat these files as reusable defaults, not as live network state.
 
 Fresh genesis is built by the selected node release and commits its execution
-policy. The fresh V2 genesis requires `xvm-execution-7`, `xvm-gas-3`,
+policy. The fresh V2 genesis requires `xvm-execution-8`, `xvm-gas-3`,
 `xvm-2` bytecode and the `xian-set-1` codec. These templates do not override
 that consensus policy. Reusing a template does not migrate an earlier node
 database; retain its original runtime for historical replay and create fresh
