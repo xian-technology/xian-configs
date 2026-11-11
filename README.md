@@ -28,7 +28,8 @@ uv run --project ../xian-cli xian network template show single-node-indexed
 Validate manifests and contract assets locally:
 
 ```bash
-uv run --project ../xian-cli    python ./scripts/validate-manifests.py
+uv run --project ../xian-cli python ./scripts/validate-manifests.py
+uv run --project ../xian-cli --group dev python -m pytest -q tests
 ```
 
 ## Asset Model
@@ -101,6 +102,8 @@ uv run --project ../xian-cli    python ./scripts/validate-manifests.py
 
 The script validates manifest schemas, cross-references, generated system
 artifacts, and committed network contract assets.
+The tests build each network's genesis from its declared bundle, check the
+staged VM profiles, and exercise system contract authorization.
 
 ## Related Docs
 

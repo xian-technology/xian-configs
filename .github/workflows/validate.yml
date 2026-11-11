@@ -74,3 +74,4 @@ jobs:
             ./contracts \
             --fail-on-issues
           uv run --project ../xian-cli python ./scripts/validate-manifests.py
+          uv run --project ../xian-cli --group dev python -m pytest -q tests

@@ -1,8 +1,8 @@
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from contracting.local import ContractingClient
-from xian_runtime_types.decimal import ContractingDecimal
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,7 +50,7 @@ def test_dao_payout_requires_validators(client):
         )
 
     assert currency.balance_of(address="alice") == 0
-    assert currency.balance_of(address="dao") == 33333333.3
+    assert currency.balance_of(address="dao") == Decimal("33333333.3")
 
     dao.transfer_from_dao(
         args={"contract_name": "currency", "amount": 10, "to": "alice"},
@@ -58,7 +58,7 @@ def test_dao_payout_requires_validators(client):
     )
 
     assert currency.balance_of(address="alice") == 10
-    assert currency.balance_of(address="dao") == 33333323.3
+    assert currency.balance_of(address="dao") == Decimal("33333323.3")
 
 
 def test_currency_default_seed_preserves_distribution(client):
@@ -69,10 +69,10 @@ def test_currency_default_seed_preserves_distribution(client):
         {"vk": "founder"},
     )
 
-    assert currency.balance_of(address="founder") == 11111111.1
-    assert currency.balance_of(address="team_lock") == 66666666.6
-    assert currency.balance_of(address="dao") == 33333333.3
-    assert currency.metadata["total_supply"] == 111111111.0
+    assert currency.balance_of(address="founder") == Decimal("11111111.1")
+    assert currency.balance_of(address="team_lock") == Decimal("66666666.6")
+    assert currency.balance_of(address="dao") == Decimal("33333333.3")
+    assert currency.metadata["total_supply"] == 111111111
 
 
 def test_currency_seed_accepts_configured_genesis_balances(client):
@@ -94,10 +94,10 @@ def test_currency_seed_accepts_configured_genesis_balances(client):
     )
 
     assert currency.balance_of(address="founder") == 0
-    assert currency.balance_of(address="alice") == ContractingDecimal("1.25")
-    assert currency.balance_of(address="bob") == ContractingDecimal("2.50")
-    assert currency.balance_of(address="dao") == ContractingDecimal("3.75")
-    assert currency.metadata["total_supply"] == ContractingDecimal("7.50")
+    assert currency.balance_of(address="alice") == Decimal("1.25")
+    assert currency.balance_of(address="bob") == Decimal("2.50")
+    assert currency.balance_of(address="dao") == Decimal("3.75")
+    assert currency.metadata["total_supply"] == Decimal("7.50")
     assert currency.metadata["token_website"] == "https://xian.org/mainnet"
 
 
@@ -121,12 +121,12 @@ def test_chi_cost_update_requires_validators(client):
 
 def test_rewards_update_requires_validators(client):
     rewards = submit_contract(client, "rewards", "rewards.s.py")
-    new_split = [0.65, 0, 0, 0.35]
+    new_split = [Decimal("0.65"), 0, 0, Decimal("0.35")]
 
     with pytest.raises(AssertionError, match="Only validators"):
         rewards.set_value(new_value=new_split, signer="alice")
 
-    assert rewards.current_value() == [0.70, 0, 0, 0.30]
+    assert rewards.current_value() == [Decimal("0.7"), 0, 0, Decimal("0.3")]
 
     rewards.set_value(new_value=new_split, signer="validators")
 
@@ -134,7 +134,7 @@ def test_rewards_update_requires_validators(client):
 
     with pytest.raises(AssertionError, match="non-negative"):
         rewards.set_value(
-            new_value=[0.70, -0.10, 0, 0.40],
+            new_value=[Decimal("0.7"), Decimal("-0.1"), 0, Decimal("0.4")],
             signer="validators",
         )
 
@@ -145,7 +145,7 @@ def test_rewards_seed_validates_the_initial_split(client):
             client,
             "rewards",
             "rewards.s.py",
-            {"initial_split": [0.70, -0.10, 0, 0.40]},
+            {"initial_split": [Decimal("0.7"), Decimal("-0.1"), 0, Decimal("0.4")]},
         )
 
 
