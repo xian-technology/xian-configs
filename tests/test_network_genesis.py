@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from xian.execution_policy import validate_genesis_execution_policy
+from xian.fee_policy import FEE_POLICY_KEY, fee_policy_state
 from xian.genesis_builder import build_bundle_network_genesis
 
 
@@ -20,9 +21,17 @@ def test_network_genesis_deploys_each_bundle_contract_on_v2(manifest_path):
         network=source["bundle"],
         genesis_time=source["genesis_time"],
         runtime_features=manifest.get("runtime_features"),
+        fee_policy=manifest["fee_policy"],
         contracts_dir=contracts_dir,
     )
     validate_genesis_execution_policy(genesis)
+    # Every network pins its hard chi caps explicitly, in canonical form.
+    assert manifest["fee_policy"] == fee_policy_state(manifest["fee_policy"])
+    assert [
+        entry["value"]
+        for entry in genesis["abci_genesis"]["genesis"]
+        if entry["key"] == FEE_POLICY_KEY
+    ] == [manifest["fee_policy"]]
     bundle = json.loads((contracts_dir / f"contracts_{source['bundle']}.json").read_text())
     names = {entry.get("submit_as") or entry["name"] for entry in bundle["contracts"]}
     names.add("submission")

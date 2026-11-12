@@ -40,6 +40,11 @@
     "bundle": "local",
     "genesis_time": "2026-03-30T00:00:00.000000Z"
   },
+  "fee_policy": {
+    "tx_fee_mode": "paid_metered",
+    "max_tx_chi": 200000,
+    "max_block_chi": 500000
+  },
   "snapshot_url": null,
   "p2p": {
     "seeds": [],

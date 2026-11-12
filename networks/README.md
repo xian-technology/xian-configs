@@ -14,6 +14,11 @@
   `contracts/contracts_<bundle>.json`.
 - Validator policy for active bundles is pinned explicitly in those bundles so
   the bundle behavior does not depend on hidden contract defaults.
+- Every manifest pins its chain `fee_policy` in canonical form (`tx_fee_mode`,
+  `max_tx_chi`, `max_block_chi`). The chi caps bound how long one transaction
+  and one block can execute in every fee mode, so they are a network decision,
+  not a node default. `scripts/validate-manifests.py` rejects a manifest
+  without them.
 - The canonical `testnet` bundle is the richest non-mainnet real-network
   fixture: it pins published node images and release provenance while still
   deriving fresh deterministic genesis from the current contract bundle.

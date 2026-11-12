@@ -674,6 +674,16 @@ def validate_privacy_artifact_catalog(
             )
 
 
+def validate_pinned_fee_policy(manifest_path: Path, manifest: dict) -> None:
+    """Hard chi caps are a network decision: the manifest pins them canonically."""
+    pinned = json.loads(manifest_path.read_text()).get("fee_policy")
+    if pinned is None or pinned != manifest["fee_policy"]:
+        raise SystemExit(
+            "canonical network manifests must pin the canonical fee_policy "
+            f"(tx_fee_mode, max_tx_chi, max_block_chi) in {manifest_path}"
+        )
+
+
 def validate_network_manifests() -> None:
     manifest_paths = sorted((REPO_ROOT / "networks").glob("*/manifest.json"))
     if not manifest_paths:
@@ -681,6 +691,7 @@ def validate_network_manifests() -> None:
 
     for manifest_path in manifest_paths:
         manifest = read_network_manifest(manifest_path)
+        validate_pinned_fee_policy(manifest_path, manifest)
         validate_privacy_artifact_catalog(
             manifest_path=manifest_path,
             manifest=manifest,
