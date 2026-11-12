@@ -30,9 +30,10 @@
   during idle interactive sessions.
 - Product- or credential-dependent sidecars such as IntentKit, DEX automation,
   and the shielded relayer remain explicit profile choices.
-- `advanced` contains template-specific low-level runtime overrides. The
-  starter templates bind application metrics to `0.0.0.0` inside containers;
-  stack and deploy host-publish settings still control public exposure.
+- `advanced` holds low-level runtime overrides; the starter templates set
+  none. `advanced.metrics.host` and `.port` are the host-side address and
+  port the stack publishes application metrics on (default `127.0.0.1:9108`);
+  inside the container the node always listens on `0.0.0.0:9108`.
 
 ## Typical Use
 - Choose a template when creating a fresh local or operator-managed network.
