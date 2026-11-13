@@ -573,7 +573,16 @@ def test_add_member_activates_with_the_power_fixed_at_proposal(client):
     assert _validator_power(client, CANDIDATE) == 10
 
 
-@pytest.mark.parametrize("power,allowed", [(MAX_VALIDATOR_POWER, True), (MAX_VALIDATOR_POWER + 1, False), (2**70, False)])
+@pytest.mark.parametrize(
+    "power,allowed",
+    [
+        (1, True),
+        (MAX_VALIDATOR_POWER, True),
+        (0, False),
+        (MAX_VALIDATOR_POWER + 1, False),
+        (2**70, False),
+    ],
+)
 def test_requested_validator_power_is_capped(client, power, allowed):
     _, validators = _deploy_validators(client)
     _fund_candidate(client)
@@ -897,3 +906,89 @@ def test_open_proposal_is_rejected_when_target_became_last_active_validator(
     assert result["status"] == "rejected"
     assert validators.get_members() == [NODE2]
     assert validators.get_validator(account=NODE2)["jailed"] is False
+
+
+def _bond(client, validators, account, amount):
+    currency = client.get_contract_proxy("currency")
+    currency.transfer(amount=amount, to=account, signer="founder")
+    currency.approve(amount=amount, to="validators", signer=account)
+    validators.bond_self(amount=amount, signer=account)
+
+
+def test_epoch_rebalance_reports_a_changed_set_as_not_retained(client):
+    _, validators = _deploy_validators(
+        client, {"selection_mode": "auto_top_n", "min_self_bond": 1}
+    )
+    _bond(client, validators, NODE1, 10)
+    _fund_candidate(client)
+    validators.register(signer=CANDIDATE)
+    validators.bond_self(amount=10, signer=CANDIDATE)
+
+    result = validators.rebalance(signer=NODE1, environment={"block_num": 1})
+
+    assert result["retained"] is False
+    assert result["activated"] == [CANDIDATE]
+    assert sorted(validators.get_members()) == sorted([NODE1, CANDIDATE])
+
+
+def test_jailing_evidence_rebalances_an_automatic_set(client):
+    _, validators = _deploy_validators(
+        client,
+        {
+            "genesis_nodes": [NODE1, NODE2],
+            "selection_mode": "auto_top_n",
+            "min_self_bond": 1,
+            "max_validators": 2,
+        },
+    )
+    _bond(client, validators, NODE2, 10)
+    _fund_candidate(client)
+    validators.register(signer=CANDIDATE)
+    validators.bond_self(amount=10, signer=CANDIDATE)
+
+    result = validators.apply_evidence_penalty(
+        member=NODE1,
+        infraction_type="DUPLICATE_VOTE",
+        evidence_id="ev-1",
+        signer="__evidence_penalty_driver__",
+    )
+
+    assert result["applied"] is True
+    assert result["jailed_now"] is True
+    assert result["slash_result"] is None
+    assert sorted(validators.get_members()) == sorted([NODE2, CANDIDATE])
+
+
+def test_add_member_is_rejected_after_the_candidate_unregisters(client):
+    _, validators = _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2, NODE3]})
+    _fund_candidate(client)
+    validators.register(signer=CANDIDATE)
+    validators.propose_vote(type_of_vote="add_member", arg=CANDIDATE, signer=NODE1)
+    validators.unregister(signer=CANDIDATE)
+
+    validators.vote(proposal_id=1, vote="yes", signer=NODE2)
+    result = validators.vote(proposal_id=1, vote="yes", signer=NODE3)
+
+    assert result["status"] == "rejected"
+    assert CANDIDATE not in validators.get_members()
+
+
+def test_jailing_evidence_rebalances_even_after_this_epochs_rebalance(client):
+    _, validators = _deploy_validators(
+        client,
+        {"genesis_nodes": [NODE1, NODE2], "selection_mode": "auto_top_n", "min_self_bond": 1},
+    )
+    _bond(client, validators, NODE1, 10)
+    _bond(client, validators, NODE2, 10)
+    validators.rebalance(signer=NODE1, environment={"block_num": 1})
+
+    result = validators.apply_evidence_penalty(
+        member=NODE1,
+        infraction_type="DUPLICATE_VOTE",
+        evidence_id="ev-1",
+        signer="__evidence_penalty_driver__",
+        environment={"block_num": 1},
+    )
+
+    assert result["jailed_now"] is True
+    assert validators.get_members() == [NODE2]
