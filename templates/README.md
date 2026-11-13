@@ -21,7 +21,9 @@
 - `monitoring_profile` expresses how the template expects monitoring to work:
   `none`, `local_stack`, or `bds`.
 - `services` contains the sidecars that the generated node profile should
-  enable. `services.bds.enabled` controls the Blockchain Data Service.
+  enable. `services.bds.enabled` controls the Blockchain Data Service; it is
+  the only BDS field a template accepts. BDS connection and tuning settings are
+  node-specific and live in the generated node profile.
 - `single-node-dev` enables the complete self-contained development surface:
   BDS/Postgres, GraphQL/GraphiQL, the dashboard, Prometheus, and Grafana. These
   services bind to loopback on the host unless an operator explicitly opts in
