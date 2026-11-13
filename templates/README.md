@@ -7,7 +7,6 @@
 ## Contents
 - one JSON file per template
 - network defaults such as block policy
-- node execution defaults such as speculative parallel execution
 - bootstrap profile defaults such as BDS, dashboard, and monitoring behavior
 - operator intent metadata such as `operator_profile` and
   `monitoring_profile`
