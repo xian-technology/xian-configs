@@ -6,7 +6,6 @@
   "block_policy_mode": "on_demand",
   "block_policy_interval": "0s",
   "operator_profile": "indexed_development",
-  "monitoring_profile": "local_stack",
   "bootstrap_node_name": "validator-1",
   "additional_validator_names": [],
   "services": {

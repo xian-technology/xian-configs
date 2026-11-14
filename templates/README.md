@@ -8,8 +8,7 @@
 - one JSON file per template
 - network defaults such as block policy
 - bootstrap profile defaults such as BDS, dashboard, and monitoring behavior
-- operator intent metadata such as `operator_profile` and
-  `monitoring_profile`
+- operator intent metadata (`operator_profile`)
 - creation conveniences such as a default bootstrap validator name
 
 ## Notes
@@ -18,8 +17,6 @@
   `network create --template ...`, and `network join --template ...`.
 - `operator_profile` expresses the intended operator posture for the template:
   local development, indexed development, or shared network.
-- `monitoring_profile` expresses how the template expects monitoring to work:
-  `none`, `local_stack`, or `bds`.
 - `services` contains the sidecars that the generated node profile should
   enable. `services.bds.enabled` controls the Blockchain Data Service; it is
   the only BDS field a template accepts. BDS connection and tuning settings are
