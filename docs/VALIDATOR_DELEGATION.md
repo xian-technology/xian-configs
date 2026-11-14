@@ -596,7 +596,7 @@ Governance vote types should eventually include:
 
 - Canonical contract source: `xian-configs/contracts/validators.s.py`
 - Canonical network bundle: `xian-configs/contracts/contracts_*.json`
-- ABCI reward integration: `xian-abci/src/xian/rewards.py`
+- Fee reward split (block executor, Rust): `xian-contracting/packages/xian-vm-core/src/tx_rewards.rs`
 - ABCI validator updates: `xian-abci/src/xian/validators.py`
 
 The current contract now covers:
