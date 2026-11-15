@@ -485,3 +485,15 @@ def test_rebalance_newcomers_and_re_entries_share_the_epoch_budget(client):
     _unjail(validators, NODES[0], 100)
 
     assert NODES[0] in validators.get_members()
+
+
+def test_governance_cannot_give_a_jail_the_reserved_downtime_reason(client):
+    # A governance jail named "downtime" would be lifted by the validator
+    # itself (and reopen its bonding): the reason belongs to the runtime.
+    _, validators = _deploy(client)
+    with pytest.raises(AssertionError, match="reserved"):
+        validators.propose_vote(
+            type_of_vote="jail_member",
+            arg={"member": NODES[0], "reason": "downtime"},
+            signer=NODES[1],
+        )

@@ -1709,6 +1709,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         member = arg["member"]
         validate_non_empty_string(member, "Member")
         validate_optional_string(arg.get("reason"), "Reason")
+        assert arg.get("reason") != "downtime", "The downtime reason is reserved."
         assert is_known_validator(member), "Unknown validator."
         assert is_jailed(member) == False, "Already jailed."
         require_not_last_active_validator(member)
