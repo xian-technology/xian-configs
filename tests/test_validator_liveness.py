@@ -220,3 +220,120 @@ def test_policy_updates_set_the_liveness_keys(client):
 
     config = validators.get_policy_config()
     assert config["max_new_power_bps"] == 1000 and config["downtime_jail_blocks"] == 7
+
+
+def test_one_miss_then_a_signature_resets_the_count(client):
+    _, validators = _deploy(client, downtime_jail_blocks=5)
+    _record(validators, [NODES[0]], 1)
+    _record(validators, [NODES[1]], 2)
+
+    assert validators.get_validator(account=NODES[0])["missed_blocks"] == 0
+
+
+def test_a_missing_downtime_window_reads_as_the_default(client):
+    _, validators = _deploy(client, downtime_jail_blocks=1)
+    client.raw_driver.set("validators.config:downtime_jail_blocks", None)
+
+    for block in range(1, 4):
+        _record(validators, [NODES[0]], block)
+
+    # The default window (500) applies: no jail after three misses.
+    assert NODES[0] in validators.get_members()
+
+
+def test_a_validator_starts_each_active_stint_with_no_missed_blocks(client):
+    currency, validators = _deploy(
+        client, selection_mode="auto_top_n", max_validators=5, max_new_power_bps=10000
+    )
+    _register(client, currency, validators, CANDIDATES[0], bond=10)
+    # A count left from an earlier stint (an evidence jail keeps it).
+    client.raw_driver.set(f"validators.missed_blocks:{CANDIDATES[0]}", 7)
+
+    validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    assert CANDIDATES[0] in validators.get_members()
+    assert validators.get_validator(account=CANDIDATES[0])["missed_blocks"] == 0
+
+
+@pytest.mark.parametrize("newcomer_power,admitted", [(10, False), (9, True)])
+def test_the_power_cap_holds_at_its_boundary(client, newcomer_power, admitted):
+    currency, validators = _deploy(
+        client,
+        nodes=3,
+        genesis_powers={node: 13 for node in NODES[:3]},
+        selection_mode="auto_top_n",
+        power_mode="requested",
+        max_validators=5,
+        max_new_power_bps=2000,
+    )
+    currency.transfer(amount=1010, to=CANDIDATES[0], signer="founder")
+    currency.approve(amount=1010, to="validators", signer=CANDIDATES[0])
+    validators.register(requested_validator_power=newcomer_power, signer=CANDIDATES[0])
+    validators.bond_self(amount=10, signer=CANDIDATES[0])
+
+    validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    # 10 of 49 is just above 20%, 9 of 48 below it.
+    assert (CANDIDATES[0] in validators.get_members()) is admitted
+
+
+def test_newcomers_fill_no_more_than_the_free_seats(client):
+    currency, validators = _deploy(
+        client,
+        selection_mode="auto_top_n",
+        max_validators=5,
+        max_active_set_churn=3,
+        max_new_power_bps=10000,
+    )
+    for account in CANDIDATES[:3]:
+        _register(client, currency, validators, account, bond=10)
+
+    validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    assert len(validators.get_members()) == 5
+
+
+@pytest.mark.parametrize("churn,replaced", [(0, 0), (1, 1), (2, 2)])
+def test_replacements_spend_the_churn_budget(client, churn, replaced):
+    currency, validators = _deploy(
+        client,
+        selection_mode="auto_top_n",
+        max_validators=4,
+        max_active_set_churn=churn,
+        min_bond_margin_bps=0,
+        max_new_power_bps=10000,
+    )
+    for account in CANDIDATES[:3]:
+        _register(client, currency, validators, account, bond=10)
+
+    validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    # The set is full: newcomers only replace (unbonded) incumbents.
+    members = validators.get_members()
+    assert len(members) == 4
+    assert sum(account in members for account in CANDIDATES) == replaced
+
+
+@pytest.mark.parametrize(
+    "arg,message",
+    [
+        ({"selection_mode": "bogus"}, "Bad selection_mode"),
+        ({"duplicate_vote_jail": 1}, "duplicate_vote_jail must be boolean"),
+        ({"max_validators": "5"}, "max_validators must be an integer"),
+    ],
+)
+def test_policy_updates_name_the_refused_key(client, arg, message):
+    _, validators = _deploy(client)
+    with pytest.raises(AssertionError, match=message):
+        validators.propose_vote(type_of_vote="update_policy", arg=arg, signer=NODES[0])
+
+
+def test_a_validator_added_by_governance_starts_with_no_missed_blocks(client):
+    currency, validators = _deploy(client, nodes=1)
+    _register(client, currency, validators, CANDIDATES[0], bond=10)
+    client.raw_driver.set(f"validators.missed_blocks:{CANDIDATES[0]}", 7)
+
+    validators.propose_vote(type_of_vote="add_member", arg=CANDIDATES[0], signer=NODES[0])
+
+    assert CANDIDATES[0] in validators.get_members()
+    assert validators.get_validator(account=CANDIDATES[0])["missed_blocks"] == 0

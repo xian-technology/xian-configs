@@ -1129,7 +1129,7 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
         if account in selected_accounts:
             if account not in previous_active:
                 activated.append(account)
-                joined_at[account] = now
+                start_active_stint(account)
             pending_registrations[account] = False
             if not pending_leave[account]:
                 statuses[account] = STATUS_ACTIVE
@@ -1346,6 +1346,13 @@ def update_profile_fields(
         metadata_uris[account] = metadata_uri
 
 
+def start_active_stint(account: str):
+    # A missed-block count from an earlier stint (an evidence or governance
+    # jail keeps it) must not shorten the downtime window of this one.
+    joined_at[account] = now
+    missed_blocks[account] = 0
+
+
 def activate_member(account: str, power: int):
     track_validator(account)
     current_nodes = active_nodes_list()
@@ -1360,7 +1367,7 @@ def activate_member(account: str, power: int):
     pending_registrations[account] = False
     pending_leave[account] = False
     statuses[account] = STATUS_ACTIVE
-    joined_at[account] = now
+    start_active_stint(account)
     left_at[account] = None
     eligible_at_epoch[account] = 0
 
