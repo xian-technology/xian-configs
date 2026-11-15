@@ -120,6 +120,10 @@ def create_token(
             "operator_address": resolved_operator,
         },
     )
+    # The submission makes this factory the token's developer, and the
+    # factory cannot spend currency: hand the developer rewards to the caller,
+    # as a direct deployment would.
+    submission.change_developer(contract=token_contract, new_developer=ctx.caller)
 
     TokenCreatedEvent(
         {
