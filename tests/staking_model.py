@@ -105,16 +105,12 @@ class Model:
     def value(self, delegator: str, validator: str) -> Decimal:
         pool = self.pools[validator]
         shares = self.shares.get((delegator, validator), Decimal(0))
-        if shares <= 0 or pool.shares <= 0:
-            return Decimal(0)
         if shares == pool.shares:
             return pool.delegated
         return proportional(shares, pool.delegated, pool.shares)
 
     def pending(self, delegator: str, validator: str) -> Decimal:
         shares = self.shares.get((delegator, validator), Decimal(0))
-        if shares <= 0:
-            return Decimal(0)
         owed = mul(shares, self.pools[validator].reward_per_share) - self.debt.get(
             (delegator, validator), Decimal(0)
         )
@@ -131,7 +127,7 @@ class Model:
     def _reset_debt(self, delegator: str, validator: str) -> None:
         shares = self.shares.get((delegator, validator), Decimal(0))
         rate = self.pools[validator].reward_per_share
-        self.debt[(delegator, validator)] = mul(shares, rate) + UNIT if shares > 0 else Decimal(0)
+        self.debt[(delegator, validator)] = mul(shares, rate) + UNIT
 
     def _pay(self, account: str, amount: Decimal) -> None:
         self.paid[account] = self.paid.get(account, Decimal(0)) + amount
@@ -144,7 +140,6 @@ class Model:
         else:
             assert pool.delegated > 0, "Delegation pool fully slashed."
             new_shares = proportional(amount, pool.shares, pool.delegated)
-            assert new_shares > 0, "Delegation too small."
         self._settle(delegator, validator)
         key = (delegator, validator)
         self.shares[key] = self.shares.get(key, Decimal(0)) + new_shares
@@ -166,7 +161,7 @@ class Model:
         else:
             burned = proportional(amount, pool.shares, pool.delegated)
             released = proportional(burned, pool.delegated, pool.shares)
-            assert burned > 0 and released > 0, "Undelegation too small."
+            assert released > 0, "Undelegation too small."
         self.shares[key] = self.shares.get(key, Decimal(0)) - burned
         pool.shares -= burned
         pool.delegated -= released

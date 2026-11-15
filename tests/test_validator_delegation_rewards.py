@@ -21,6 +21,7 @@ from xian.fee_policy import TxFeePolicy
 from xian.processor import TxProcessor
 from xian.utils.tx import transaction_bytes
 from xian_runtime_types.decimal import ContractingDecimal
+from xian_runtime_types.time import Timedelta
 
 CONTRACTS_DIR = Path(__file__).absolute().parents[1] / "contracts"
 NODE1 = "a1" * 32
@@ -170,6 +171,8 @@ def test_claim_pays_the_pending_reward_to_the_reward_key(chain):
 
     # The claim's own fee is credited after the payout.
     assert chain.balance("rk_alice") == pending
+    assert Decimal(result["result"]["__fixed__"]) == pending
+    assert _ok(chain.call("bob", "claim_rewards", validator=NODE1))["result"] == 0
     assert [event["event"] for event in result["events"]][-1] == "DelegatorRewardClaimed"
     assert chain.view("get_pending_rewards", delegator="alice", validator=NODE1) > 0
 
@@ -181,11 +184,14 @@ def test_delegation_changes_settle_the_pending_reward_first(chain):
 
     _ok(chain.call("alice", "delegate", validator=NODE1, amount=50, reward_key="rk_new"))
     assert chain.balance("rk_alice") == pending
+    _ok(chain.call("bob", "delegate", validator=NODE1, amount=10))
+    assert chain.view("get_validator", account=NODE1)["delegator_count"] == 2
 
     pending = chain.view("get_pending_rewards", delegator="alice", validator=NODE1)
     _ok(chain.call("alice", "undelegate", validator=NODE1, amount=150))
     assert chain.balance("rk_new") == pending
     assert chain.view("get_delegation", delegator="alice", validator=NODE1)["amount"] == 0
+    assert chain.view("get_validator", account=NODE1)["delegator_count"] == 1
 
 
 def test_a_new_delegator_earns_nothing_from_earlier_fees(chain):
@@ -219,6 +225,33 @@ def test_slash_lowers_the_pool_and_keeps_earned_rewards_claimable(chain):
     assert chain.get(f"validators.delegation_shares:alice:{NODE1}") == shares
     assert chain.view("get_delegation", delegator="alice", validator=NODE1)["amount"] == 150
     assert chain.view("get_pending_rewards", delegator="alice", validator=NODE1) >= earned
+
+
+def _slash_alone(chain, node, slash_bps):
+    return _ok(
+        chain.call(node, "propose_vote", type_of_vote="slash_member", arg={"member": node, "slash_bps": slash_bps})
+    )
+
+
+def test_after_a_slash_a_delegation_buys_more_shares(chain):
+    _ok(chain.call("alice", "delegate", validator=NODE1, amount=1))
+    _slash_alone(chain, NODE1, 5000)
+
+    _ok(chain.call("bob", "delegate", validator=NODE1, amount=1))
+
+    assert chain.get(f"validators.delegation_shares:bob:{NODE1}") == 2
+    assert chain.view("get_delegation", delegator="bob", validator=NODE1)["amount"] == 1
+    assert chain.view("get_delegation", delegator="alice", validator=NODE1)["amount"] == Decimal("0.5")
+
+
+def test_an_undelegation_worth_less_than_a_unit_is_refused(chain):
+    _ok(chain.call("alice", "delegate", validator=NODE1, amount=3))
+    _slash_alone(chain, NODE1, 3333)  # 2.0001 tokens for 3 shares
+
+    refused = chain.call("alice", "undelegate", validator=NODE1, amount=_amount("1e-30"))
+
+    assert refused["status"] == 1 and "too small" in refused["result"]
+    assert chain.get(f"validators.delegation_shares:alice:{NODE1}") == 3
 
 
 def test_a_fully_slashed_pool_earns_nothing_and_its_holders_can_leave(chain):
@@ -260,6 +293,43 @@ def test_exit_keeps_delegations_and_stops_their_rewards(tmp_path):
     assert self_bond_unbond["owner"] == NODE2 and delegation_unbond["owner"] == "alice"
     assert delegation_unbond["created_block"] > self_bond_unbond["created_block"]
     assert delegation_unbond["unlock_at"] == self_bond_unbond["unlock_at"]
+
+
+@pytest.mark.parametrize(
+    "cap,configured,effective", [(-5, 9000, 0), (20000, 15000, 10000), (20000, 9000, 9000)]
+)
+def test_a_patched_policy_maximum_is_clamped_to_the_bps_range(tmp_path, cap, configured, effective):
+    chain = Chain(tmp_path, [NODE1], commissions={NODE1: configured})
+    for account in ("alice", "sender"):
+        chain.fund(account)
+    driver = chain.client.raw_driver
+    driver.set("validators.config:max_commission_bps", cap)  # a state patch
+    driver.commit()
+    _ok(chain.call("alice", "delegate", validator=NODE1, amount=100))
+
+    result = _ok(chain.send("sender", "currency", "transfer", amount=1, to="bob"))
+
+    assert chain.view("get_validator", account=NODE1)["commission_bps"] == effective
+    paid = {record["type"]: Decimal(str(record["value"])) for record in result["reward_records"]}
+    total = sum(paid.values())
+    # No self bond: the operator earns exactly its commission.
+    assert paid.get("validator_reward", 0) == total * effective / 10000
+
+
+def test_undelegating_from_a_jailed_validator_unbonds_on_the_usual_clock(tmp_path):
+    chain = Chain(tmp_path, [NODE1, NODE2])
+    for account in (NODE1, NODE2, "alice", "sender"):
+        chain.fund(account)
+    _ok(chain.call("alice", "delegate", validator=NODE2, amount=100))
+    _ok(chain.call(NODE1, "propose_vote", type_of_vote="jail_member", arg={"member": NODE2}))
+    _ok(chain.call(NODE2, "vote", proposal_id=1, vote="yes"))
+    assert chain.view("get_validator", account=NODE2)["jailed"] is True
+
+    _ok(chain.call("alice", "undelegate", validator=NODE2, amount=100))
+
+    # A jailed validator has a left_at too; only an exit moves the clock.
+    unbond = chain.get("validators.pending_unbonds:1")
+    assert unbond["unlock_at"] == unbond["created_at"] + Timedelta(days=7)
 
 
 def test_commission_is_capped_by_the_policy_maximum(tmp_path):

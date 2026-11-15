@@ -489,11 +489,7 @@ def effective_max_commission_bps():
     max_commission = config["max_commission_bps"]
     if max_commission is None:
         return MAX_COMMISSION_BPS
-    if max_commission < 0:
-        return 0
-    if max_commission > MAX_COMMISSION_BPS:
-        return MAX_COMMISSION_BPS
-    return max_commission
+    return min(max(max_commission, 0), MAX_COMMISSION_BPS)
 
 
 def effective_commission_bps(account: str):
@@ -692,8 +688,7 @@ def mul_div(value: Any, numerator: Any, denominator: Any):
 def delegation_value(delegator: str, validator: str):
     shares = delegation_shares[delegator, validator]
     pool_shares = total_shares[validator]
-    if shares <= 0 or pool_shares <= 0:
-        return 0
+    # The sole holder (or nobody: an empty pool holds nothing) owns it all.
     if shares == pool_shares:
         return total_delegated[validator]
     return mul_div(shares, total_delegated[validator], pool_shares)
@@ -705,9 +700,9 @@ def shares_for_amount(validator: str, amount: decimal):
         return amount
     pool_tokens = total_delegated[validator]
     assert pool_tokens > 0, "Delegation pool fully slashed."
-    shares = mul_div(amount, pool_shares, pool_tokens)
-    assert shares > 0, "Delegation too small."
-    return shares
+    # Slashes only lower the tokens, so a share is worth at most one token
+    # and any positive amount buys a positive number of shares.
+    return mul_div(amount, pool_shares, pool_tokens)
 
 
 def released_stake(delegator: str, validator: str, amount: decimal, value: decimal):
@@ -716,13 +711,13 @@ def released_stake(delegator: str, validator: str, amount: decimal, value: decim
         return delegation_shares[delegator, validator], value
     burned = mul_div(amount, total_shares[validator], total_delegated[validator])
     released = mul_div(burned, total_delegated[validator], total_shares[validator])
-    assert burned > 0 and released > 0, "Undelegation too small."
+    assert released > 0, "Undelegation too small."
     return burned, released
 
 
 def add_pool_shares(delegator: str, validator: str, shares: decimal, amount: decimal):
     current_shares = delegation_shares[delegator, validator]
-    if current_shares <= 0:
+    if current_shares == 0:
         delegator_counts[validator] = delegator_counts[validator] + 1
     delegation_shares[delegator, validator] = current_shares + shares
     total_shares[validator] = total_shares[validator] + shares
@@ -734,7 +729,7 @@ def remove_pool_shares(delegator: str, validator: str, shares: decimal, amount: 
     delegation_shares[delegator, validator] = remaining_shares
     total_shares[validator] = total_shares[validator] - shares
     total_delegated[validator] = total_delegated[validator] - amount
-    if remaining_shares <= 0:
+    if remaining_shares == 0:
         delegator_counts[validator] = delegator_counts[validator] - 1
 
 
@@ -746,12 +741,8 @@ def delegation_reward_key(delegator: str, validator: str):
 
 def pending_delegator_reward(delegator: str, validator: str):
     shares = delegation_shares[delegator, validator]
-    if shares <= 0:
-        return 0
-    pending = shares * reward_per_share[validator] - reward_debt[delegator, validator]
-    if pending <= 0:
-        return 0
-    return pending
+    # The debt's extra unit makes an untouched position's difference -1 unit.
+    return max(shares * reward_per_share[validator] - reward_debt[delegator, validator], 0)
 
 
 def settle_delegator_reward(delegator: str, validator: str):
@@ -774,12 +765,9 @@ def settle_delegator_reward(delegator: str, validator: str):
 
 
 def reset_reward_debt(delegator: str, validator: str):
-    shares = delegation_shares[delegator, validator]
-    if shares <= 0:
-        reward_debt[delegator, validator] = 0
-        return
     reward_debt[delegator, validator] = (
-        shares * reward_per_share[validator] + REWARD_DEBT_ROUNDING
+        delegation_shares[delegator, validator] * reward_per_share[validator]
+        + REWARD_DEBT_ROUNDING
     )
 
 
