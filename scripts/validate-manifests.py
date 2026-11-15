@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from xian_runtime_types.decimal import ContractingDecimal, canonical_fixed
 from xian_runtime_types.numeric_wire import decode_wire_numbers
 
 from generate_token_factory_artifacts import verify_token_factory_artifacts
+from mainnet_allocations import load_allocation_balances
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_BUNDLE_NAMES = ("local", "devnet", "testnet", "mainnet")
@@ -89,66 +89,12 @@ def find_contract(
     return contract
 
 
-def normalize_amount_string(value) -> str:
-    if isinstance(value, bool):
-        raise SystemExit("allocation amounts must not be boolean")
-    try:
-        amount = Decimal(str(value))
-    except (InvalidOperation, ValueError) as exc:
-        raise SystemExit(f"invalid allocation amount: {value!r}") from exc
-    if not amount.is_finite():
-        raise SystemExit(f"allocation amount must be finite: {value!r}")
-    if amount < 0:
-        raise SystemExit(f"allocation amount must not be negative: {value!r}")
-    return format(amount, "f")
-
-
 def load_mainnet_allocations() -> dict[str, str]:
     allocation_path = REPO_ROOT / "contracts" / "mainnet_allocations.json"
-    payload = json.loads(allocation_path.read_text(encoding="utf-8"))
-    if payload.get("schema") != "xian.mainnet_allocations.v1":
-        raise SystemExit(f"unsupported mainnet allocation schema in {allocation_path}")
-    if payload.get("schema_version") != 1:
-        raise SystemExit(
-            f"unsupported mainnet allocation schema_version in {allocation_path}"
-        )
-    if payload.get("network") != "mainnet":
-        raise SystemExit(
-            f"mainnet allocation network must be mainnet in {allocation_path}"
-        )
-    if payload.get("chain_id") != CANONICAL_MAINNET_CHAIN_ID:
-        raise SystemExit(
-            "mainnet allocation chain_id must be "
-            f"{CANONICAL_MAINNET_CHAIN_ID} in {allocation_path}"
-        )
-
-    currency = payload.get("currency")
-    if not isinstance(currency, dict):
-        raise SystemExit(
-            f"mainnet allocation currency must be an object in {allocation_path}"
-        )
-    balances = currency.get("balances")
-    if not isinstance(balances, dict) or not balances:
-        raise SystemExit(
-            f"mainnet allocation currency.balances must be a non-empty object in {allocation_path}"
-        )
-
-    normalized = {}
-    total_supply = Decimal("0")
-    for account, amount in balances.items():
-        if not isinstance(account, str) or not account:
-            raise SystemExit(
-                f"mainnet allocation account must be non-empty in {allocation_path}"
-            )
-        normalized_amount = normalize_amount_string(amount)
-        normalized[account] = normalized_amount
-        total_supply += Decimal(normalized_amount)
-
-    if total_supply <= 0:
-        raise SystemExit(
-            f"mainnet allocation total supply must be positive in {allocation_path}"
-        )
-    return normalized
+    try:
+        return load_allocation_balances(allocation_path)
+    except ValueError as exc:
+        raise SystemExit(f"invalid mainnet allocation: {exc}") from exc
 
 
 def validate_explicit_genesis_key_maps(
@@ -308,11 +254,7 @@ def validate_mainnet_currency_allocations(
         raise SystemExit(
             f"mainnet currency constructor_args.initial_balances must be non-empty in {bundle_path}"
         )
-    observed_balances = {
-        account: normalize_amount_string(amount)
-        for account, amount in initial_balances.items()
-    }
-    if observed_balances != expected_balances:
+    if initial_balances != expected_balances:
         raise SystemExit(
             "mainnet currency initial_balances must match "
             f"contracts/mainnet_allocations.json in {bundle_path}"

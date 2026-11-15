@@ -9,3 +9,5 @@
   generated system assets, and contract bundles.
 - `sync-mainnet-allocations.py` copies the accepted mainnet allocation source
   from `contracts/mainnet_allocations.json` into the mainnet contract bundle.
+  `mainnet_allocations.py` parses that file for both scripts and refuses any
+  entry that would not reach genesis exactly as written.

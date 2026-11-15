@@ -12,7 +12,12 @@
   validator policy surface explicitly rather than relying on contract defaults.
 - `mainnet_allocations.json` is the source file for mainnet currency genesis
   balances. Run `../scripts/sync-mainnet-allocations.py` after editing it, then
-  validate with `../scripts/validate-manifests.py`.
+  validate with `../scripts/validate-manifests.py`. Each holder appears once,
+  as a lowercase 64-hex account key or a contract name, with its balance as a
+  plain decimal string (no sign or exponent, at most 30 fractional digits).
+  Anything else is refused, so every balance reaches genesis exactly as
+  written; the sync prints the holder count and total supply to check against
+  the source ledger.
 
 ## Wallet and Governance Boundaries
 
