@@ -634,6 +634,80 @@ def validate_pinned_fee_policy(manifest_path: Path, manifest: dict) -> None:
         )
 
 
+def _validate_bundle_genesis(manifest_path: Path, manifest: dict, *, network: str) -> None:
+    genesis = manifest["genesis"]
+    if genesis["kind"] != "bundle" or genesis["bundle"] != network:
+        raise SystemExit(
+            f"canonical {network} must derive genesis from the {network} bundle "
+            f"in {manifest_path}"
+        )
+    if genesis["genesis_time"] is None:
+        raise SystemExit(f"canonical {network} must pin genesis_time in {manifest_path}")
+
+
+def _validate_registry_release(manifest_path: Path, manifest: dict, *, network: str) -> None:
+    if manifest["node_image_mode"] != "registry":
+        raise SystemExit(
+            f"canonical {network} must pin published registry images in {manifest_path}"
+        )
+    if manifest["node_integrated_image"] is None or manifest["node_split_image"] is None:
+        raise SystemExit(
+            f"canonical {network} registry image mode requires both node "
+            f"images in {manifest_path}"
+        )
+    if not isinstance(manifest["node_release_manifest"], dict):
+        raise SystemExit(
+            f"canonical {network} must embed node release provenance in {manifest_path}"
+        )
+
+
+def _validate_mainnet_privacy_catalog(manifest_path: Path, manifest: dict) -> None:
+    catalog_ref = manifest["privacy_artifact_catalog"]
+    catalog_path = (manifest_path.parent / catalog_ref["path"]).resolve()
+    catalog_payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+    bundle_policy = catalog_payload.get("bundle_policy") or {}
+    if bundle_policy.get("approved_setup_modes") != ["ceremony-import"]:
+        raise SystemExit(
+            "canonical mainnet privacy catalog must only approve "
+            f"ceremony-import setup mode in {catalog_path}"
+        )
+    if bundle_policy.get("allow_single_party") is not False:
+        raise SystemExit(
+            "canonical mainnet privacy catalog must reject single-party "
+            f"setup artifacts in {catalog_path}"
+        )
+    if catalog_payload.get("artifacts") != []:
+        raise SystemExit(
+            "canonical mainnet privacy catalog must stay empty until "
+            f"ceremony-derived artifacts are approved in {catalog_path}"
+        )
+
+
+def validate_canonical_testnet(manifest_path: Path, manifest: dict) -> None:
+    _validate_bundle_genesis(manifest_path, manifest, network="testnet")
+    _validate_registry_release(manifest_path, manifest, network="testnet")
+
+
+def validate_canonical_mainnet(manifest_path: Path, manifest: dict) -> None:
+    if manifest["chain_id"] != CANONICAL_MAINNET_CHAIN_ID:
+        raise SystemExit(
+            f"canonical mainnet chain_id must be {CANONICAL_MAINNET_CHAIN_ID} in {manifest_path}"
+        )
+    _validate_bundle_genesis(manifest_path, manifest, network="mainnet")
+    if manifest.get("runtime_features") != {"zk": True}:
+        raise SystemExit(
+            f"canonical mainnet must explicitly enable the zk runtime feature in {manifest_path}"
+        )
+    _validate_registry_release(manifest_path, manifest, network="mainnet")
+    _validate_mainnet_privacy_catalog(manifest_path, manifest)
+
+
+CANONICAL_NETWORK_RULES = {
+    "testnet": validate_canonical_testnet,
+    "mainnet": validate_canonical_mainnet,
+}
+
+
 def validate_network_manifests() -> None:
     manifest_paths = sorted((REPO_ROOT / "networks").glob("*/manifest.json"))
     if not manifest_paths:
@@ -646,105 +720,14 @@ def validate_network_manifests() -> None:
             manifest_path=manifest_path,
             manifest=manifest,
         )
-        if not isinstance(manifest.get("shielded_history_policy"), dict):
-            raise SystemExit(
-                "canonical network manifests must define shielded_history_policy in "
-                f"{manifest_path}"
-            )
-        if not isinstance(manifest.get("privacy_submission_policy"), dict):
-            raise SystemExit(
-                "canonical network manifests must define privacy_submission_policy in "
-                f"{manifest_path}"
-            )
-        if manifest["name"] == "testnet":
-            genesis = manifest["genesis"]
-            if genesis["kind"] != "bundle" or genesis["bundle"] != "testnet":
+        for key in ("shielded_history_policy", "privacy_submission_policy"):
+            if not isinstance(manifest.get(key), dict):
                 raise SystemExit(
-                    "canonical testnet must derive genesis from the testnet bundle "
-                    f"in {manifest_path}"
+                    f"canonical network manifests must define {key} in {manifest_path}"
                 )
-            if genesis["genesis_time"] is None:
-                raise SystemExit(
-                    f"canonical testnet must pin genesis_time in {manifest_path}"
-                )
-            if manifest["node_image_mode"] != "registry":
-                raise SystemExit(
-                    "canonical testnet must pin published registry images in "
-                    f"{manifest_path}"
-                )
-            if (
-                manifest["node_integrated_image"] is None
-                or manifest["node_split_image"] is None
-            ):
-                raise SystemExit(
-                    "canonical testnet registry image mode requires both node "
-                    f"images in {manifest_path}"
-                )
-            if not isinstance(manifest["node_release_manifest"], dict):
-                raise SystemExit(
-                    "canonical testnet must embed node release provenance in "
-                    f"{manifest_path}"
-                )
-
-        if manifest["name"] == "mainnet":
-            if manifest["chain_id"] != CANONICAL_MAINNET_CHAIN_ID:
-                raise SystemExit(
-                    "canonical mainnet chain_id must be "
-                    f"{CANONICAL_MAINNET_CHAIN_ID} in {manifest_path}"
-                )
-            genesis = manifest["genesis"]
-            if genesis["kind"] != "bundle" or genesis["bundle"] != "mainnet":
-                raise SystemExit(
-                    "canonical mainnet must derive genesis from the mainnet bundle "
-                    f"in {manifest_path}"
-                )
-            if genesis["genesis_time"] is None:
-                raise SystemExit(
-                    f"canonical mainnet must pin genesis_time in {manifest_path}"
-                )
-            if manifest.get("runtime_features") != {"zk": True}:
-                raise SystemExit(
-                    "canonical mainnet must explicitly enable the zk runtime "
-                    f"feature in {manifest_path}"
-                )
-            if manifest["node_image_mode"] != "registry":
-                raise SystemExit(
-                    "canonical mainnet must pin published registry images in "
-                    f"{manifest_path}"
-                )
-            if (
-                manifest["node_integrated_image"] is None
-                or manifest["node_split_image"] is None
-            ):
-                raise SystemExit(
-                    "canonical mainnet registry image mode requires both node "
-                    f"images in {manifest_path}"
-                )
-            if not isinstance(manifest["node_release_manifest"], dict):
-                raise SystemExit(
-                    "canonical mainnet must embed node release provenance in "
-                    f"{manifest_path}"
-                )
-            catalog_ref = manifest["privacy_artifact_catalog"]
-            catalog_path = (manifest_path.parent / catalog_ref["path"]).resolve()
-            catalog_payload = json.loads(catalog_path.read_text(encoding="utf-8"))
-            bundle_policy = catalog_payload.get("bundle_policy") or {}
-            if bundle_policy.get("approved_setup_modes") != ["ceremony-import"]:
-                raise SystemExit(
-                    "canonical mainnet privacy catalog must only approve "
-                    f"ceremony-import setup mode in {catalog_path}"
-                )
-            if bundle_policy.get("allow_single_party") is not False:
-                raise SystemExit(
-                    "canonical mainnet privacy catalog must reject single-party "
-                    f"setup artifacts in {catalog_path}"
-                )
-            if catalog_payload.get("artifacts") != []:
-                raise SystemExit(
-                    "canonical mainnet privacy catalog must stay empty until "
-                    f"ceremony-derived artifacts are approved in {catalog_path}"
-                )
-
+        network_rules = CANONICAL_NETWORK_RULES.get(manifest["name"])
+        if network_rules is not None:
+            network_rules(manifest_path, manifest)
         print(f"validated {manifest_path.relative_to(REPO_ROOT)}")
 
 
