@@ -126,6 +126,23 @@ def test_chi_cost_update_requires_validators(client):
     assert chi_cost.current_value() == 7
 
 
+# The largest chi rate the node prices fees with (vm-core ``valid_chi_rate``):
+# a stored rate above it stops every validator at the next paid transaction.
+MAX_CHI_RATE = 10**61 - 1
+
+
+def test_chi_cost_refuses_a_rate_the_node_cannot_price_with(client):
+    # Genesis refuses such an initial rate itself (xian-abci genesis builder).
+    chi_cost = submit_contract(client, "chi_cost", "chi_cost.s.py", {"initial_rate": 20})
+
+    with pytest.raises(AssertionError, match="Chi cost exceeds"):
+        chi_cost.set_value(new_value=MAX_CHI_RATE + 1, signer="validators")
+
+    assert chi_cost.current_value() == 20
+    chi_cost.set_value(new_value=MAX_CHI_RATE, signer="validators")
+    assert chi_cost.current_value() == MAX_CHI_RATE
+
+
 def test_rewards_update_requires_validators(client):
     rewards = submit_contract(client, "rewards", "rewards.s.py")
     new_split = [Decimal("0.65"), 0, 0, Decimal("0.35")]
@@ -183,6 +200,17 @@ def test_chi_cost_proposal_rejects_values_the_chi_cost_contract_cannot_store(cli
 
     assert validators.total_votes.get() == 0
     assert client.get_contract_proxy("chi_cost").current_value() == 20
+
+
+def test_chi_cost_proposal_rejects_a_rate_the_node_cannot_price_with(client):
+    _, validators = _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2]})
+
+    with pytest.raises(AssertionError, match="Chi cost exceeds"):
+        validators.propose_vote(
+            type_of_vote="chi_cost_change", arg=MAX_CHI_RATE + 1, signer=NODE1
+        )
+
+    assert validators.total_votes.get() == 0
 
 
 def test_chi_cost_proposal_executes_integer_rates(client):

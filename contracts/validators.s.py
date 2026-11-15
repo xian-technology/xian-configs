@@ -1611,6 +1611,9 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
     if type_of_vote == "chi_cost_change":
         assert is_integer(arg), "Chi cost must be an integer."
         assert arg > 0, "Chi cost must be positive."
+        assert arg <= chi_cost.max_value(), (
+            "Chi cost exceeds the largest rate the node can price with."
+        )
 
     if type_of_vote == "change_types":
         assert isinstance(arg, list), "Vote types must be a list."
