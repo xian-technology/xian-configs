@@ -354,11 +354,12 @@ def test_slashing_keeps_nonnegative_balances_and_conserves_value(client, stake_a
         signer=NODE1,
     )
     assert proposal["status"] == "approved"
-    remaining = [validators.get_validator(account=NODE1)["self_bond"]]
-    for delegator in ["alice", "bob", "carol"]:
-        remaining.append(
-            validators.get_delegation(delegator=delegator, validator=NODE1)["amount"]
-        )
+    record = validators.get_validator(account=NODE1)
+    values = [
+        validators.get_delegation(delegator=delegator, validator=NODE1)["amount"]
+        for delegator in ["alice", "bob", "carol"]
+    ]
+    remaining = [record["self_bond"], *values]
     assert all(amount >= 0 for amount in remaining)
     assert all(after <= before for before, after in zip(amounts, remaining))
     with localcontext() as context:
@@ -367,8 +368,11 @@ def test_slashing_keeps_nonnegative_balances_and_conserves_value(client, stake_a
             Decimal("1e-30"), rounding=ROUND_DOWN
         )
         assert proposal["result"]["slash_amount"] == expected_slash
-        assert sum(remaining) == sum(amounts) - expected_slash
-    assert currency.balance_of(address="validators") == sum(remaining)
+        # The stake is conserved per pool; a holder's value is its share of
+        # the pool, rounded down (at most one unit per holder stays pooled).
+        assert record["self_bond"] + record["total_delegated"] == sum(amounts) - expected_slash
+        assert 0 <= record["total_delegated"] - sum(values) < Decimal("3e-30")
+    assert currency.balance_of(address="validators") == record["total_bond"]
 
 
 def test_state_patch_votes_reject_passed_activation_height(client):

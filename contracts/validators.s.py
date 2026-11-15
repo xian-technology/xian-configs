@@ -19,10 +19,19 @@ holdings = Hash(default_value=0)
 config = Hash(default_value=None)
 commission_bps = Hash(default_value=0)
 self_bond = Hash(default_value=0)
+# Each validator's delegation pool: total_delegated[V] tokens owned by
+# total_shares[V] shares. A slash lowers the tokens, so every share at once.
 total_delegated = Hash(default_value=0)
-delegations = Hash(default_value=0)
+total_shares = Hash(default_value=0)
+delegation_shares = Hash(default_value=0)
+delegator_counts = Hash(default_value=0)
 delegator_reward_keys = Hash(default_value=None)
-delegator_lists = Hash(default_value=None)
+# Lazy delegator rewards: the fee path adds each paid transaction's pool
+# credit to reward_pool[V] and its rate per share to reward_per_share[V];
+# a delegator is paid shares * reward_per_share - reward_debt on change.
+reward_per_share = Hash(default_value=0)
+reward_debt = Hash(default_value=0)
+reward_pool = Hash(default_value=0)
 pending_unbond_counter = Variable()
 pending_unbond_owner_ids = Hash(default_value=None)
 pending_unbond_validator_ids = Hash(default_value=None)
@@ -90,6 +99,11 @@ SYSTEM_EVIDENCE_CALLER = "__evidence_penalty_driver__"
 MAX_VALIDATOR_POWER = 1000000000000
 # CometBFT MaxTotalVotingPower: MaxInt64 / 8.
 MAX_TOTAL_VOTING_POWER = 1152921504606846975
+# Added to a reward debt so a holder is never paid a rounding unit it did
+# not earn: payouts then never exceed the pool (validators docs, rewards).
+REWARD_DEBT_ROUNDING = decimal("0.000000000000000000000000000001")
+DECIMAL_SCALE = 1000000000000000000000000000000
+EXITED_STATUSES = ["left", "removed", "withdrawn"]
 CANONICAL_KEY_LENGTH = 64
 CANONICAL_KEY_DIGITS = "0123456789abcdef"
 
@@ -134,6 +148,36 @@ ValidatorProposalRejectedEvent = LogEvent(
         "type_of_vote": {"type": str, "idx": True},
         "rejector": {"type": str, "idx": True},
         "status": {"type": str},
+    },
+)
+
+DelegatedEvent = LogEvent(
+    "Delegated",
+    {
+        "delegator": {"type": str, "idx": True},
+        "validator": {"type": str, "idx": True},
+        "amount": {"type": (int, decimal)},
+        "shares": {"type": (int, decimal)},
+    },
+)
+
+UndelegatedEvent = LogEvent(
+    "Undelegated",
+    {
+        "delegator": {"type": str, "idx": True},
+        "validator": {"type": str, "idx": True},
+        "amount": {"type": (int, decimal)},
+        "shares": {"type": (int, decimal)},
+    },
+)
+
+DelegatorRewardClaimedEvent = LogEvent(
+    "DelegatorRewardClaimed",
+    {
+        "delegator": {"type": str, "idx": True},
+        "validator": {"type": str, "idx": True},
+        "recipient": {"type": str, "idx": True},
+        "amount": {"type": (int, decimal)},
     },
 )
 
@@ -256,7 +300,6 @@ def seed(
         commission_bps[node] = DEFAULT_COMMISSION_BPS
         self_bond[node] = 0
         total_delegated[node] = 0
-        delegator_lists[node] = []
         requested_power[node] = resolve_requested_power(
             node,
             genesis_powers,
@@ -300,14 +343,6 @@ def resolve_reward_key(account: str, configured_reward_keys: dict = None):
 
 
 def normalize_reward_key(account: str, reward_key: str = None):
-    if reward_key is None:
-        return account
-    if reward_key == "":
-        return account
-    return reward_key
-
-
-def normalize_delegator_reward_key(account: str, reward_key: str = None):
     if reward_key is None:
         return account
     if reward_key == "":
@@ -390,13 +425,6 @@ def candidate_list():
     return current_candidates
 
 
-def delegator_list(validator: str):
-    current_delegators = delegator_lists[validator]
-    if current_delegators is None:
-        return []
-    return current_delegators
-
-
 def owner_pending_unbond_ids(owner: str):
     current_unbond_ids = pending_unbond_owner_ids[owner]
     if current_unbond_ids is None:
@@ -457,16 +485,26 @@ def effective_reward_key(account: str):
     return reward_key
 
 
+def effective_max_commission_bps():
+    max_commission = config["max_commission_bps"]
+    if max_commission is None:
+        return MAX_COMMISSION_BPS
+    if max_commission < 0:
+        return 0
+    if max_commission > MAX_COMMISSION_BPS:
+        return MAX_COMMISSION_BPS
+    return max_commission
+
+
 def effective_commission_bps(account: str):
+    # The fee path (vm-core tx_rewards) pays exactly this rate.
     configured_bps = commission_bps[account]
     if configured_bps is None:
         return DEFAULT_COMMISSION_BPS
     if configured_bps < 0:
         return DEFAULT_COMMISSION_BPS
 
-    max_commission = config["max_commission_bps"]
-    if max_commission is None:
-        max_commission = MAX_COMMISSION_BPS
+    max_commission = effective_max_commission_bps()
     if configured_bps > max_commission:
         return max_commission
 
@@ -640,19 +678,117 @@ def can_accept_delegation(account: str):
     return status == STATUS_PENDING or status == STATUS_ACTIVE or status == STATUS_APPROVED
 
 
-def add_delegator(validator: str, delegator: str):
-    current_delegators = delegator_list(validator)
-    if delegator in current_delegators:
-        return
-    current_delegators.append(delegator)
-    delegator_lists[validator] = current_delegators
+def scaled_units(value: Any):
+    # A non-negative amount in units of 10**-30 (exact).
+    return int(value * DECIMAL_SCALE)
 
 
-def remove_delegator(validator: str, delegator: str):
-    current_delegators = delegator_list(validator)
-    if delegator not in current_delegators:
+def mul_div(value: Any, numerator: Any, denominator: Any):
+    # value * numerator / denominator, truncated once (not after each step).
+    units = scaled_units(value) * scaled_units(numerator) // scaled_units(denominator)
+    return decimal(units) / DECIMAL_SCALE
+
+
+def delegation_value(delegator: str, validator: str):
+    shares = delegation_shares[delegator, validator]
+    pool_shares = total_shares[validator]
+    if shares <= 0 or pool_shares <= 0:
+        return 0
+    if shares == pool_shares:
+        return total_delegated[validator]
+    return mul_div(shares, total_delegated[validator], pool_shares)
+
+
+def shares_for_amount(validator: str, amount: decimal):
+    pool_shares = total_shares[validator]
+    if pool_shares <= 0:
+        return amount
+    pool_tokens = total_delegated[validator]
+    assert pool_tokens > 0, "Delegation pool fully slashed."
+    shares = mul_div(amount, pool_shares, pool_tokens)
+    assert shares > 0, "Delegation too small."
+    return shares
+
+
+def released_stake(delegator: str, validator: str, amount: decimal, value: decimal):
+    # A leaver never takes more than its shares are worth.
+    if amount == value:
+        return delegation_shares[delegator, validator], value
+    burned = mul_div(amount, total_shares[validator], total_delegated[validator])
+    released = mul_div(burned, total_delegated[validator], total_shares[validator])
+    assert burned > 0 and released > 0, "Undelegation too small."
+    return burned, released
+
+
+def add_pool_shares(delegator: str, validator: str, shares: decimal, amount: decimal):
+    current_shares = delegation_shares[delegator, validator]
+    if current_shares <= 0:
+        delegator_counts[validator] = delegator_counts[validator] + 1
+    delegation_shares[delegator, validator] = current_shares + shares
+    total_shares[validator] = total_shares[validator] + shares
+    total_delegated[validator] = total_delegated[validator] + amount
+
+
+def remove_pool_shares(delegator: str, validator: str, shares: decimal, amount: decimal):
+    remaining_shares = delegation_shares[delegator, validator] - shares
+    delegation_shares[delegator, validator] = remaining_shares
+    total_shares[validator] = total_shares[validator] - shares
+    total_delegated[validator] = total_delegated[validator] - amount
+    if remaining_shares <= 0:
+        delegator_counts[validator] = delegator_counts[validator] - 1
+
+
+def delegation_reward_key(delegator: str, validator: str):
+    return normalize_reward_key(
+        delegator, delegator_reward_keys[delegator, validator]
+    )
+
+
+def pending_delegator_reward(delegator: str, validator: str):
+    shares = delegation_shares[delegator, validator]
+    if shares <= 0:
+        return 0
+    pending = shares * reward_per_share[validator] - reward_debt[delegator, validator]
+    if pending <= 0:
+        return 0
+    return pending
+
+
+def settle_delegator_reward(delegator: str, validator: str):
+    pending = pending_delegator_reward(delegator, validator)
+    if pending <= 0:
+        return 0
+    assert reward_pool[validator] >= pending, "Reward pool short."
+    reward_pool[validator] = reward_pool[validator] - pending
+    recipient = delegation_reward_key(delegator, validator)
+    currency.transfer(pending, recipient)
+    DelegatorRewardClaimedEvent(
+        {
+            "delegator": delegator,
+            "validator": validator,
+            "recipient": recipient,
+            "amount": pending,
+        }
+    )
+    return pending
+
+
+def reset_reward_debt(delegator: str, validator: str):
+    shares = delegation_shares[delegator, validator]
+    if shares <= 0:
+        reward_debt[delegator, validator] = 0
         return
-    delegator_lists[validator] = without_item(current_delegators, delegator)
+    reward_debt[delegator, validator] = (
+        shares * reward_per_share[validator] + REWARD_DEBT_ROUNDING
+    )
+
+
+def unbond_unlock_at(validator: str, unbonding_period_days: int):
+    # Leaving an exited validator unlocks when its exit's unbonding ends.
+    start = now
+    if statuses[validator] in EXITED_STATUSES and left_at[validator] is not None:
+        start = left_at[validator]
+    return start + datetime.timedelta(days=unbonding_period_days)
 
 
 def next_unbond_id():
@@ -681,7 +817,7 @@ def create_pending_unbond(
     unbonding_period_days = config["unbonding_period_days"]
     if unbonding_period_days is None:
         unbonding_period_days = DEFAULT_UNBONDING_PERIOD_DAYS
-    unlock_at = now + datetime.timedelta(days=unbonding_period_days)
+    unlock_at = unbond_unlock_at(validator, unbonding_period_days)
     unbond_id = next_unbond_id()
     pending_unbond = {
         "id": unbond_id,
@@ -741,21 +877,8 @@ def sweep_validator_bonding_state(account: str, reason: str):
             reason=reason,
         )
 
-    current_delegators = delegator_list(account)
-    for delegator in current_delegators:
-        current_delegation = delegations[delegator, account]
-        if current_delegation > 0:
-            create_pending_unbond(
-                owner=delegator,
-                validator=account,
-                amount=current_delegation,
-                kind="delegation",
-                reason=reason,
-            )
-        delegations[delegator, account] = 0
-
-    total_delegated[account] = 0
-    delegator_lists[account] = []
+    # Delegations stay in the validator's pool, which earns nothing once it
+    # is inactive; each delegator undelegates when it chooses.
 
 
 def all_validator_accounts():
@@ -886,9 +1009,6 @@ def approve_candidate(account: str, power: int):
     eligible_at_epoch[account] = (
         current_selection_epoch() + effective_activation_delay_epochs()
     )
-    if delegator_lists[account] is None:
-        delegator_lists[account] = []
-
     ensure_candidate(account)
 
     requested_power[account] = power
@@ -1062,7 +1182,10 @@ def validator_record(account: str):
         "total_delegated": total_delegated[account],
         "total_bond": total_bonded(account),
         "commission_bps": effective_commission_bps(account),
-        "delegator_count": len(delegator_list(account)),
+        "total_shares": total_shares[account],
+        "delegator_count": delegator_counts[account],
+        "reward_per_share": reward_per_share[account],
+        "reward_pool": reward_pool[account],
         "pending_unbond_count": unbond_count,
         "pending_unbond_total": unbond_total,
         "next_unbond_unlock_at": next_unbond_unlock_at,
@@ -1208,8 +1331,6 @@ def activate_member(account: str, power: int):
     joined_at[account] = now
     left_at[account] = None
     eligible_at_epoch[account] = 0
-    if delegator_lists[account] is None:
-        delegator_lists[account] = []
 
     requested_power[account] = power
     powers[account] = power
@@ -1318,14 +1439,10 @@ def slashable_bond_participants(account: str, infraction_height: int = None):
             {"kind": "self_bond", "owner": account, "amount": current_self_bond}
         )
 
-    for delegator in delegator_list(account):
-        current_delegation = delegations[delegator, account]
-        if current_delegation <= 0:
-            continue
-        total_slashable_bond += current_delegation
-        slash_participants.append(
-            {"kind": "delegation", "owner": delegator, "amount": current_delegation}
-        )
+    pool_tokens = total_delegated[account]
+    if pool_tokens > 0:
+        total_slashable_bond += pool_tokens
+        slash_participants.append({"kind": "delegation_pool", "amount": pool_tokens})
 
     for unbond_id in validator_pending_unbond_ids(account):
         pending_unbond = pending_unbonds[unbond_id]
@@ -1388,14 +1505,9 @@ def slash_validator(
             pending_unbond_slashed += participant_slash
             continue
 
-        delegator = participant["owner"]
-        delegations[delegator, account] = (
-            delegations[delegator, account] - participant_slash
-        )
+        # Lowers every share's value; shares and earned rewards are untouched.
         total_delegated[account] = total_delegated[account] - participant_slash
         delegated_slashed += participant_slash
-        if delegations[delegator, account] == 0:
-            remove_delegator(account, delegator)
 
     total_slashed[account] = total_slashed[account] + slash_amount
     last_slashed_at[account] = now
@@ -2328,8 +2440,6 @@ def register(
     pending_leave[ctx.caller] = False
     self_bond[ctx.caller] = self_bond[ctx.caller]
     total_delegated[ctx.caller] = total_delegated[ctx.caller]
-    if delegator_lists[ctx.caller] is None:
-        delegator_lists[ctx.caller] = []
 
     update_profile_fields(
         ctx.caller,
@@ -2390,47 +2500,65 @@ def unbond_self(amount: decimal):
 
 @export
 def delegate(validator: str, amount: decimal, reward_key: str = None):
+    delegator = ctx.caller
     assert amount > 0, "Delegation amount <= 0"
-    assert validator != ctx.caller, "Use bond_self."
+    assert validator != delegator, "Use bond_self."
     assert can_accept_delegation(validator), "Closed."
+    shares = shares_for_amount(validator, amount)
 
+    settle_delegator_reward(delegator, validator)
     currency.transfer_from(
         amount=amount,
         to=ctx.this,
-        main_account=ctx.caller,
+        main_account=delegator,
     )
-
-    delegations[ctx.caller, validator] = delegations[ctx.caller, validator] + amount
-    total_delegated[validator] = total_delegated[validator] + amount
-    add_delegator(validator, ctx.caller)
+    add_pool_shares(delegator, validator, shares, amount)
+    reset_reward_debt(delegator, validator)
 
     if reward_key is not None:
-        delegator_reward_keys[ctx.caller, validator] = normalize_delegator_reward_key(
-            ctx.caller, reward_key
+        delegator_reward_keys[delegator, validator] = normalize_reward_key(
+            delegator, reward_key
         )
-    elif delegator_reward_keys[ctx.caller, validator] is None:
-        delegator_reward_keys[ctx.caller, validator] = ctx.caller
+    elif delegator_reward_keys[delegator, validator] is None:
+        delegator_reward_keys[delegator, validator] = delegator
 
-    return get_delegation(ctx.caller, validator)
+    DelegatedEvent(
+        {"delegator": delegator, "validator": validator, "amount": amount, "shares": shares}
+    )
+    return get_delegation(delegator, validator)
 
 
 @export
 def undelegate(validator: str, amount: decimal):
-    assert amount > 0, "Delegation amount <= 0"
-    assert delegations[ctx.caller, validator] >= amount, "Not enough delegated stake."
+    delegator = ctx.caller
+    value = delegation_value(delegator, validator)
+    # A position worth nothing (a fully slashed pool) leaves with amount 0.
+    assert amount > 0 or (amount == 0 and value == 0 and delegation_shares[delegator, validator] > 0), "Delegation amount <= 0"
+    assert value >= amount, "Not enough delegated stake."
 
-    delegations[ctx.caller, validator] = delegations[ctx.caller, validator] - amount
-    total_delegated[validator] = total_delegated[validator] - amount
+    settle_delegator_reward(delegator, validator)
+    shares, released = released_stake(delegator, validator, amount, value)
+    remove_pool_shares(delegator, validator, shares, released)
+    reset_reward_debt(delegator, validator)
 
-    if delegations[ctx.caller, validator] == 0:
-        remove_delegator(validator, ctx.caller)
-
+    UndelegatedEvent(
+        {"delegator": delegator, "validator": validator, "amount": released, "shares": shares}
+    )
+    if released <= 0:
+        return get_delegation(delegator, validator)
     return create_pending_unbond(
-        owner=ctx.caller,
+        owner=delegator,
         validator=validator,
-        amount=amount,
+        amount=released,
         kind="delegation",
     )
+
+
+@export
+def claim_rewards(validator: str):
+    paid = settle_delegator_reward(ctx.caller, validator)
+    reset_reward_debt(ctx.caller, validator)
+    return paid
 
 
 @export
@@ -2453,16 +2581,16 @@ def get_delegation(delegator: str, validator: str):
     return {
         "delegator": delegator,
         "validator": validator,
-        "amount": delegations[delegator, validator],
-        "reward_key": normalize_delegator_reward_key(
-            delegator, delegator_reward_keys[delegator, validator]
-        ),
+        "amount": delegation_value(delegator, validator),
+        "shares": delegation_shares[delegator, validator],
+        "pending_rewards": pending_delegator_reward(delegator, validator),
+        "reward_key": delegation_reward_key(delegator, validator),
     }
 
 
 @export
-def get_delegators(validator: str):
-    return delegator_list(validator)
+def get_pending_rewards(delegator: str, validator: str):
+    return pending_delegator_reward(delegator, validator)
 
 
 @export
@@ -2483,6 +2611,9 @@ def get_reward_distribution_info(validator: str):
         "commission_bps": effective_commission_bps(validator),
         "self_bond": self_bond[validator],
         "total_delegated": total_delegated[validator],
+        "total_shares": total_shares[validator],
         "total_bond": total_bonded(validator),
-        "delegators": delegator_list(validator),
+        "delegator_count": delegator_counts[validator],
+        "reward_per_share": reward_per_share[validator],
+        "reward_pool": reward_pool[validator],
     }
