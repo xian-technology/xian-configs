@@ -896,14 +896,27 @@ def ready_for_selection(account: str, selection_epoch: int):
     return selection_epoch >= eligible_at_epoch[account]
 
 
+def meets_min_bonds(account: str):
+    return (
+        self_bond[account] >= effective_min_self_bond()
+        and total_bonded(account) >= effective_min_total_bond()
+    )
+
+
+def require_min_bonds(account: str):
+    assert self_bond[account] >= effective_min_self_bond(), "Below the minimum self bond."
+    assert total_bonded(account) >= effective_min_total_bond(), "Below the minimum total bond."
+
+
 def can_be_selected(account: str, selection_mode: str, selection_epoch: int):
     if is_jailed(account):
         return False
-    if self_bond[account] < effective_min_self_bond():
+    if meets_min_bonds(account) == False:
         return False
-    if total_bonded(account) < effective_min_total_bond():
-        return False
+    return status_allows_selection(account, selection_mode, selection_epoch)
 
+
+def status_allows_selection(account: str, selection_mode: str, selection_epoch: int):
     status = statuses[account]
     if pending_leave[account]:
         return status == STATUS_LEAVING and account in active_nodes_list()
@@ -1016,6 +1029,25 @@ def approve_candidate(account: str, power: int):
     return validator_record(account)
 
 
+def fill_empty_seats(
+    selected_accounts: list,
+    ranked_accounts: list,
+    previous_active: list,
+    max_validators: int,
+    churn_budget: int,
+):
+    # Newcomers fill empty seats and replace incumbents within one churn
+    # budget, so no rebalance can hand most of the set to fresh accounts.
+    for account in ranked_accounts:
+        if churn_budget <= 0 or len(selected_accounts) >= max_validators:
+            break
+        if account in previous_active:
+            continue
+        selected_accounts = insert_ranked_account(selected_accounts, account)
+        churn_budget -= 1
+    return selected_accounts, churn_budget
+
+
 def rebalance_validator_set(force: bool = False, require_selection: bool = True):
     selection_mode = effective_selection_mode()
     assert selection_mode != "manual", "Auto selection disabled."
@@ -1048,12 +1080,9 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
             if weakest_active not in deactivated:
                 deactivated.append(weakest_active)
 
-    for account in ranked_accounts:
-        if account in previous_active:
-            continue
-        if len(selected_accounts) >= max_validators:
-            break
-        selected_accounts = insert_ranked_account(selected_accounts, account)
+    selected_accounts, replacement_budget = fill_empty_seats(
+        selected_accounts, ranked_accounts, previous_active, max_validators, replacement_budget
+    )
 
     if len(selected_accounts) >= max_validators and replacement_budget > 0:
         for challenger in ranked_accounts:
@@ -1635,6 +1664,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         else:
             assert pending_registrations[arg] == True, "Member must have pending registration."
         assert is_jailed(arg) == False, "Jailed."
+        require_min_bonds(arg)
 
     if type_of_vote == "remove_member":
         validate_non_empty_string(arg, "Member")
@@ -2053,6 +2083,8 @@ def reject_vote(proposal_id: int):
 
 def can_add_member(member: str):
     if is_jailed(member):
+        return False
+    if meets_min_bonds(member) == False:
         return False
     if pending_registrations[member] == True:
         return True
