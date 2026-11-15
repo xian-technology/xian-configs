@@ -138,7 +138,12 @@ def test_chi_cost_refuses_a_rate_the_node_cannot_price_with(client):
     with pytest.raises(AssertionError, match="Chi cost exceeds"):
         chi_cost.set_value(new_value=MAX_CHI_RATE + 1, signer="validators")
 
+    with pytest.raises(AssertionError, match="greater than 0"):
+        chi_cost.set_value(new_value=0, signer="validators")
+
     assert chi_cost.current_value() == 20
+    chi_cost.set_value(new_value=1, signer="validators")
+    assert chi_cost.current_value() == 1
     chi_cost.set_value(new_value=MAX_CHI_RATE, signer="validators")
     assert chi_cost.current_value() == MAX_CHI_RATE
 
@@ -211,6 +216,8 @@ def test_chi_cost_proposal_rejects_a_rate_the_node_cannot_price_with(client):
         )
 
     assert validators.total_votes.get() == 0
+    validators.propose_vote(type_of_vote="chi_cost_change", arg=MAX_CHI_RATE, signer=NODE1)
+    assert validators.total_votes.get() == 1
 
 
 def test_chi_cost_proposal_executes_integer_rates(client):
