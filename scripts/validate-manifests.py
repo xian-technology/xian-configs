@@ -35,6 +35,10 @@ REQUIRED_VALIDATORS_CONSTRUCTOR_ARGS = (
     "duplicate_vote_jail",
     "light_client_attack_slash_bps",
     "light_client_attack_jail",
+    "max_new_power_bps",
+    "downtime_jail_blocks",
+    "downtime_slash_bps",
+    "downtime_unjail_cooldown_hours",
 )
 CANONICAL_TESTNET_NODE_COUNT = 5
 CANONICAL_MAINNET_CHAIN_ID = "xian-mainnet-1"
@@ -476,14 +480,14 @@ def validate_contract_bundles() -> None:
                     f"start at 1/1 thresholds in {bundle_path}"
                 )
             expected_validator_policy = {
-                "selection_mode": "auto_top_n",
+                "selection_mode": "manual",
                 "max_validators": CANONICAL_MAINNET_MAX_VALIDATORS,
                 "power_mode": "equal",
                 "rebalance_interval": 720,
                 "activation_delay_epochs": 1,
                 "unbonding_period_days": 14,
-                "min_self_bond": 0,
-                "min_total_bond": 0,
+                "min_self_bond": 100000,
+                "min_total_bond": 500000,
                 "max_commission_bps": 2000,
                 "max_active_set_churn": 1,
                 "min_bond_margin_bps": 500,
@@ -493,6 +497,10 @@ def validate_contract_bundles() -> None:
                 "duplicate_vote_jail": True,
                 "light_client_attack_slash_bps": 1000,
                 "light_client_attack_jail": True,
+                "max_new_power_bps": 2000,
+                "downtime_jail_blocks": 500,
+                "downtime_slash_bps": 0,
+                "downtime_unjail_cooldown_hours": 24,
             }
             for key, expected_value in expected_validator_policy.items():
                 if constructor_args.get(key) != expected_value:
