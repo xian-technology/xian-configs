@@ -6,7 +6,7 @@ import difflib
 import sys
 from pathlib import Path
 
-from contracting.artifacts import build_contract_artifacts
+from xian_compiler_core import compile_contract_artifact
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOKEN_FACTORY_PATH = REPO_ROOT / "contracts" / "token_factory.s.py"
@@ -43,11 +43,8 @@ def _chunked_python_string(name: str, value: str) -> str:
 
 def render_generated_block() -> str:
     source = TOKEN_TEMPLATE_PATH.read_text(encoding="utf-8")
-    artifacts = build_contract_artifacts(
-        module_name=TOKEN_TEMPLATE_MODULE,
-        source=source,
-        lint=True,
-        vm_profile=VM_PROFILE,
+    artifacts = compile_contract_artifact(
+        TOKEN_TEMPLATE_MODULE, source, vm_profile=VM_PROFILE
     )
 
     lines = [
