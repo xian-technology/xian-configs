@@ -116,7 +116,9 @@ def test_the_last_active_validator_is_never_jailed_for_downtime(client):
 
 
 def test_a_downtime_jailed_validator_unjails_itself_after_the_cooldown(client):
-    _, validators = _deploy(client, downtime_jail_blocks=1, downtime_unjail_cooldown_hours=2)
+    _, validators = _deploy(
+        client, nodes=5, downtime_jail_blocks=1, downtime_unjail_cooldown_hours=2
+    )
     _record(validators, [NODES[0]], 1, now=START)
 
     with pytest.raises(AssertionError, match="cooldown"):
@@ -125,8 +127,112 @@ def test_a_downtime_jailed_validator_unjails_itself_after_the_cooldown(client):
 
     record = validators.get_validator(account=NODES[0])
     assert record["jailed"] is False
-    # Manual selection: back to an approved candidate; governance re-adds it.
-    assert record["status"] == "approved" and NODES[0] not in validators.get_members()
+    # Downtime is not malicious: back in the active set, manual mode too.
+    assert record["status"] == "active" and NODES[0] in validators.get_members()
+    assert record["power"] == 10 and record["missed_blocks"] == 0
+
+
+def _jail_for_downtime(validators, account, block):
+    _record(validators, [account], block)
+    assert validators.get_validator(account=account)["jail_reason"] == "downtime"
+
+
+def _unjail(validators, account, block):
+    return validators.unjail(
+        signer=account, environment={"block_num": block, "now": Datetime(2026, 1, 2)}
+    )
+
+
+def test_re_entry_respects_the_newcomer_cap_per_epoch(client):
+    _, validators = _deploy(
+        client,
+        nodes=6,
+        max_validators=10,
+        rebalance_interval=100,
+        downtime_jail_blocks=1,
+        downtime_unjail_cooldown_hours=0,
+        max_new_power_bps=2000,
+    )
+    _jail_for_downtime(validators, NODES[0], 1)
+    _jail_for_downtime(validators, NODES[1], 2)
+
+    _unjail(validators, NODES[0], 3)  # 10 of 50: within 20%
+    with pytest.raises(AssertionError, match="retry next epoch"):
+        _unjail(validators, NODES[1], 4)  # 20 of 60 newly admitted this epoch
+    assert validators.get_validator(account=NODES[1])["jailed"] is True
+
+    _unjail(validators, NODES[1], 100)  # the next epoch has its own budget
+
+    assert validators.get_members() == NODES[2:6] + [NODES[0], NODES[1]]
+
+
+def test_re_entry_into_a_small_set_waits_for_a_wider_cap(client):
+    _, validators = _deploy(
+        client, nodes=3, downtime_jail_blocks=1, downtime_unjail_cooldown_hours=0
+    )
+    _jail_for_downtime(validators, NODES[0], 1)
+
+    # One of three is a third of the power: above the 20% cap.
+    with pytest.raises(AssertionError, match="retry next epoch"):
+        _unjail(validators, NODES[0], 2)
+
+
+def test_re_entry_requires_the_minimum_stake(client):
+    currency, validators = _deploy(
+        client,
+        nodes=5,
+        downtime_jail_blocks=1,
+        downtime_unjail_cooldown_hours=0,
+        min_self_bond=50,
+        min_total_bond=50,
+    )
+    _jail_for_downtime(validators, NODES[0], 1)
+
+    with pytest.raises(AssertionError, match="minimum"):
+        _unjail(validators, NODES[0], 2)
+    currency.transfer(amount=50, to=NODES[0], signer="founder")
+    currency.approve(amount=50, to="validators", signer=NODES[0])
+    validators.bond_self(amount=50, signer=NODES[0])
+    _unjail(validators, NODES[0], 3)
+
+    assert NODES[0] in validators.get_members()
+
+
+def test_without_a_free_seat_an_unjailed_validator_waits_as_a_candidate(client):
+    currency, validators = _deploy(
+        client,
+        selection_mode="auto_top_n",
+        max_validators=4,
+        max_new_power_bps=10000,
+        downtime_jail_blocks=1,
+        downtime_unjail_cooldown_hours=0,
+    )
+    _register(client, currency, validators, CANDIDATES[0], bond=10)
+    _jail_for_downtime(validators, NODES[0], 1)  # the jail rebalance fills the seat
+    assert CANDIDATES[0] in validators.get_members()
+
+    _unjail(validators, NODES[0], 2)
+
+    record = validators.get_validator(account=NODES[0])
+    assert record["jailed"] is False and record["status"] == "approved"
+    assert NODES[0] not in validators.get_members()
+
+
+def test_an_evidence_jail_lifted_by_governance_keeps_manual_re_adding(client):
+    _, validators = _deploy(client)
+    validators.apply_evidence_penalty(
+        member=NODES[0],
+        infraction_type="DUPLICATE_VOTE",
+        evidence_id="ev-1",
+        signer="__evidence_penalty_driver__",
+    )
+    validators.propose_vote(type_of_vote="unjail_member", arg=NODES[0], signer=NODES[1])
+    for voter in NODES[2:4]:
+        validators.vote(proposal_id=1, vote="yes", signer=voter)
+
+    record = validators.get_validator(account=NODES[0])
+    assert record["jailed"] is False and record["status"] == "approved"
+    assert NODES[0] not in validators.get_members()
 
 
 def test_only_downtime_jails_can_be_lifted_by_the_validator(client):
@@ -357,3 +463,25 @@ def test_a_newcomer_that_filled_a_seat_does_not_also_replace(client):
     members = validators.get_members()
     assert len(members) == len(set(members)) == 5
     assert CANDIDATES[0] in members and CANDIDATES[1] in members
+
+
+def test_rebalance_newcomers_and_re_entries_share_the_epoch_budget(client):
+    currency, validators = _deploy(
+        client,
+        nodes=6,
+        selection_mode="auto_top_n",
+        max_validators=10,
+        rebalance_interval=100,
+        max_new_power_bps=2000,
+        downtime_jail_blocks=1,
+        downtime_unjail_cooldown_hours=0,
+    )
+    _register(client, currency, validators, CANDIDATES[0], bond=10)
+    _jail_for_downtime(validators, NODES[0], 1)  # the jail rebalance admits C0
+    assert CANDIDATES[0] in validators.get_members()
+
+    with pytest.raises(AssertionError, match="retry next epoch"):
+        _unjail(validators, NODES[0], 2)  # 20 of 70 admitted this epoch
+    _unjail(validators, NODES[0], 100)
+
+    assert NODES[0] in validators.get_members()

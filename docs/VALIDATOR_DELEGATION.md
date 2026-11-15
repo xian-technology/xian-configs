@@ -253,8 +253,24 @@ signature or nil vote resets a validator's `missed_blocks`, and at
 evidence penalty path (infraction `DOWNTIME`, `downtime_slash_bps`). Nobody is
 jailed while more than a third of the active power is absent, nor the last
 active validator. The validator lifts a downtime jail itself with `unjail()`
-after `downtime_unjail_cooldown_hours`; it then returns as an approved
-candidate like any unjailed validator (the next rebalance in automatic modes).
+after `downtime_unjail_cooldown_hours`. Downtime is not malicious, so the validator's minimum stake must hold, and if a seat is free it re-enters the
+active set at once (in every selection mode, `manual` included) with its
+requested power (`manual`) or its selection power (automatic modes) and a
+fresh missed-block count. The re-entry counts against the same
+`max_new_power_bps` budget as the epoch's rebalance newcomers: when the
+newcomers admitted in the current selection epoch (rebalance interval) would
+then exceed the cap, `unjail()` is refused ("retry next epoch") and the
+validator stays jailed until it calls again in a later epoch. Without a free
+seat the jail is lifted and the validator waits as an approved candidate.
+Evidence and governance jails keep their path: governance lifts them, and the
+validator returns as an approved candidate (re-added by `add_member` in
+`manual` mode, re-selected by the next rebalance otherwise).
+
+With equal power and the 20% cap a validator re-enters directly only into a
+set of at least four active validators (its 10 of 50 power is the cap); in a
+smaller set `unjail()` keeps refusing, and governance lifts the jail with
+`unjail_member` and re-adds the validator with `add_member` (governance is
+not capped).
 
 Newcomers admitted by an automatic rebalance (empty seats and replacements)
 hold at most `max_new_power_bps` of the new set's power together, so even a

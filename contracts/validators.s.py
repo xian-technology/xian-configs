@@ -64,6 +64,10 @@ joined_at = Hash(default_value=None)
 left_at = Hash(default_value=None)
 eligible_at_epoch = Hash(default_value=0)
 last_rebalance_epoch = Variable()
+# Newcomer power admitted in admission_epoch (rebalances and re-entries after
+# a downtime jail share one max_new_power_bps budget per selection epoch).
+admission_epoch = Variable()
+admitted_new_power = Variable()
 
 STATUS_NONE = "none"
 STATUS_PENDING = "pending"
@@ -1003,10 +1007,23 @@ def approve_candidate(account: str, power: int):
     return validator_record(account)
 
 
+def newcomer_power_admitted():
+    if admission_epoch.get() != current_selection_epoch():
+        return 0
+    return admitted_new_power.get()
+
+
+def record_admitted_power(power: int):
+    admitted = newcomer_power_admitted()
+    admission_epoch.set(current_selection_epoch())
+    admitted_new_power.set(admitted + power)
+
+
 def within_new_power_cap(accounts: list, previous_active: list):
-    # Newcomers' share of the set's power stays within max_new_power_bps.
+    # Newcomers' share of the set's power, with those admitted earlier this
+    # epoch, stays within max_new_power_bps.
     total_power = 0
-    new_power = 0
+    new_power = newcomer_power_admitted()
     for account in accounts:
         power = selected_validator_power(account)
         total_power += power
@@ -1125,11 +1142,13 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
         }
 
     activated = []
+    new_power = 0
     for account in known_accounts:
         if account in selected_accounts:
             if account not in previous_active:
                 activated.append(account)
                 start_active_stint(account)
+                new_power += selected_validator_power(account)
             pending_registrations[account] = False
             if not pending_leave[account]:
                 statuses[account] = STATUS_ACTIVE
@@ -1153,6 +1172,8 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
     active_validators.set(selected_accounts)
     candidates.set(next_candidates)
     last_rebalance_epoch.set(selection_epoch)
+    if new_power > 0:
+        record_admitted_power(new_power)
     require_total_power_within_limit()
 
     return {
@@ -2219,6 +2240,26 @@ def record_liveness(absent: list):
     return {"absent": absent_members, "partition": partition, "jailed": jailed_now}
 
 
+def re_enter_after_downtime(account: str):
+    # Downtime is not malicious: the validator returns to the active set in
+    # every mode, within the minimum stake and the epoch's newcomer budget.
+    # Without a free seat it stays an approved candidate.
+    require_min_bonds(account)
+    members = active_nodes_list()
+    if len(members) >= policy("max_validators"):
+        return
+    if policy("selection_mode") == "manual":
+        power = effective_requested_power(account)
+    else:
+        power = selected_validator_power(account)
+    admitted = newcomer_power_admitted() + power
+    assert (
+        admitted * 10000 <= policy("max_new_power_bps") * (active_power(members) + power)
+    ), "Newcomer power cap reached; retry next epoch."
+    record_admitted_power(power)
+    activate_member(account, power)
+
+
 @export
 def unjail():
     account = ctx.caller
@@ -2227,6 +2268,7 @@ def unjail():
     cooldown = datetime.timedelta(hours=policy("downtime_unjail_cooldown_hours"))
     assert now >= last_jailed_at[account] + cooldown, "Unjail cooldown not over."
     unjail_validator(account)
+    re_enter_after_downtime(account)
     return validator_record(account)
 
 
@@ -2388,7 +2430,10 @@ def unregister():
 @export
 def bond_self(amount: decimal):
     assert amount > 0, "Bond amount <= 0"
-    assert can_accept_delegation(ctx.caller), "Bonding closed."
+    # A validator jailed for downtime may top up its own bond to re-enter.
+    assert (
+        can_accept_delegation(ctx.caller) or jail_reasons[ctx.caller] == "downtime"
+    ), "Bonding closed."
 
     currency.transfer_from(
         amount=amount,
