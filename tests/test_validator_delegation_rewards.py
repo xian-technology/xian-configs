@@ -381,6 +381,18 @@ def _random_op(rng, chain, model):
     return kind, node, delegator, None
 
 
+def _fee_chi(result):
+    """The chi whose fee a paid transaction paid out: the chi it used.
+
+    The receipt's ``chi_used`` is the chi charged, which includes the
+    burned unused-chi charge; rewards are paid on the chi used. The test
+    chain splits fees 1/0/0/0, so the validator and delegator-pool records
+    pay that chi out whole."""
+    records = result["reward_records"]
+    assert {record["type"] for record in records} <= {"validator_reward", "delegator_pool_reward"}
+    paid = sum(Decimal(str(record["value"])) for record in records)
+    return int((paid * RATE).to_integral_value())
+
 def _apply(chain, model, op):
     """Runs `op` on the chain and on the model; returns whether the chain accepted it."""
     kind, node, delegator, amount = op
@@ -407,7 +419,7 @@ def _apply(chain, model, op):
     else:
         with pytest.raises(AssertionError):
             action()
-    model.credit_fee(result["chi_used"])
+    model.credit_fee(_fee_chi(result))
     return result
 
 
@@ -420,13 +432,13 @@ def _slash(chain, model, node, slash_bps):
         if result["status"] != 0:
             with pytest.raises(AssertionError):
                 model.slash(node, slash_bps)
-            model.credit_fee(result["chi_used"])
+            model.credit_fee(_fee_chi(result))
             return result
         if not _proposal_open(chain):
             model.slash(node, slash_bps)
-            model.credit_fee(result["chi_used"])
+            model.credit_fee(_fee_chi(result))
             return result
-        model.credit_fee(result["chi_used"])
+        model.credit_fee(_fee_chi(result))
         result = chain.call(next(voters), "vote", proposal_id=chain.get("validators.total_votes"), vote="yes")
 
 
