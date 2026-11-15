@@ -57,6 +57,7 @@ def test_filling_empty_slots_counts_against_the_churn_limit(client):
         selection_mode="auto_top_n",
         max_validators=7,
         max_active_set_churn=2,
+        max_new_power_bps=10000,
     )
     for account in CANDIDATES[:5]:
         _register(client, currency, validators, account, bond=10)
@@ -157,7 +158,9 @@ def test_mainnet_registrants_cannot_take_the_set(client):
 
 
 def test_switching_from_manual_to_automatic_selection_is_one_policy_vote(client):
-    currency, validators = _deploy(client, min_self_bond=100, max_validators=5)
+    currency, validators = _deploy(
+        client, min_self_bond=100, max_validators=5, max_new_power_bps=10000
+    )
     for node in (NODE1, NODE2):
         currency.transfer(amount=100, to=node, signer="founder")
         currency.approve(amount=100, to="validators", signer=node)

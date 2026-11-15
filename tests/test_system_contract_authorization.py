@@ -911,6 +911,7 @@ def test_hybrid_approval_keeps_the_power_fixed_at_proposal(client):
             "genesis_nodes": [NODE1, NODE2],
             "selection_mode": "hybrid",
             "power_mode": "requested",
+            "max_new_power_bps": 10000,
         },
     )
     _fund_candidate(client)
@@ -956,7 +957,7 @@ def _bond(client, validators, account, amount):
 
 def test_epoch_rebalance_reports_a_changed_set_as_not_retained(client):
     _, validators = _deploy_validators(
-        client, {"selection_mode": "auto_top_n", "min_self_bond": 1}
+        client, {"selection_mode": "auto_top_n", "min_self_bond": 1, "max_new_power_bps": 10000}
     )
     _bond(client, validators, NODE1, 10)
     _fund_candidate(client)
@@ -978,6 +979,7 @@ def test_jailing_evidence_rebalances_an_automatic_set(client):
             "selection_mode": "auto_top_n",
             "min_self_bond": 1,
             "max_validators": 2,
+            "max_new_power_bps": 10000,
         },
     )
     _bond(client, validators, NODE2, 10)

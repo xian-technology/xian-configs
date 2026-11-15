@@ -85,7 +85,11 @@
         "duplicate_vote_slash_bps": 500,
         "duplicate_vote_jail": true,
         "light_client_attack_slash_bps": 1000,
-        "light_client_attack_jail": true
+        "light_client_attack_jail": true,
+        "max_new_power_bps": 2000,
+        "downtime_jail_blocks": 500,
+        "downtime_slash_bps": 0,
+        "downtime_unjail_cooldown_hours": 24
       }
     },
     {

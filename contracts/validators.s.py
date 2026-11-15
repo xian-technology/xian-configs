@@ -32,6 +32,9 @@ delegator_reward_keys = Hash(default_value=None)
 reward_per_share = Hash(default_value=0)
 reward_debt = Hash(default_value=0)
 reward_pool = Hash(default_value=0)
+# Consecutive blocks a validator's signature was absent from the decided
+# last commit (FinalizeBlock, through record_liveness).
+missed_blocks = Hash(default_value=0)
 pending_unbond_counter = Variable()
 pending_unbond_owner_ids = Hash(default_value=None)
 pending_unbond_validator_ids = Hash(default_value=None)
@@ -94,6 +97,13 @@ DEFAULT_SLASH_DESTINATION = "dao"
 DEFAULT_DUPLICATE_VOTE_SLASH_BPS = 500
 DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS = 1000
 SYSTEM_EVIDENCE_CALLER = "__evidence_penalty_driver__"
+SYSTEM_LIVENESS_CALLER = "__liveness_driver__"
+# Newcomers a rebalance admits may hold at most this share of the new set's
+# power, so validators that never come online cannot stall consensus.
+DEFAULT_MAX_NEW_POWER_BPS = 2000
+DEFAULT_DOWNTIME_JAIL_BLOCKS = 500
+DEFAULT_DOWNTIME_SLASH_BPS = 0
+DEFAULT_DOWNTIME_UNJAIL_COOLDOWN_HOURS = 24
 # A single validator's power stays far below CometBFT's total limit, so even a
 # very large set cannot overflow consensus; the total is still checked.
 MAX_VALIDATOR_POWER = 1000000000000
@@ -239,23 +249,14 @@ def seed(
     duplicate_vote_jail: bool = True,
     light_client_attack_slash_bps: int = DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS,
     light_client_attack_jail: bool = True,
+    max_new_power_bps: int = DEFAULT_MAX_NEW_POWER_BPS,
+    downtime_jail_blocks: int = DEFAULT_DOWNTIME_JAIL_BLOCKS,
+    downtime_slash_bps: int = DEFAULT_DOWNTIME_SLASH_BPS,
+    downtime_unjail_cooldown_hours: int = DEFAULT_DOWNTIME_UNJAIL_COOLDOWN_HOURS,
 ):
     assert is_number(genesis_registration_fee), "registration_fee must be numeric."
     assert genesis_registration_fee > 0, "registration_fee <= 0"
     assert default_node_power > 0, "default_node_power <= 0"
-    assert selection_mode in ["manual", "auto_top_n", "hybrid"], "Bad selection mode."
-    assert max_validators > 0, "max_validators <= 0"
-    assert power_mode in ["equal", "requested", "stake_weighted"], "Bad power mode."
-    assert rebalance_interval > 0, "rebalance_interval <= 0"
-    assert activation_delay_epochs >= 0, "activation_delay_epochs < 0"
-    assert unbonding_period_days >= 0, "unbonding_period_days < 0"
-    assert min_self_bond >= 0, "min_self_bond < 0"
-    assert min_total_bond >= 0, "min_total_bond < 0"
-    assert max_commission_bps >= 0, "max_commission_bps < 0"
-    assert max_commission_bps <= MAX_COMMISSION_BPS, "max_commission_bps > 10000"
-    assert max_active_set_churn >= 0, "max_active_set_churn < 0"
-    assert min_bond_margin_bps >= 0, "min_bond_margin_bps < 0"
-    assert slash_destination != "", "slash_destination empty"
 
     active_validators.set([])
     candidates.set([])
@@ -265,23 +266,32 @@ def seed(
     types.set(default_vote_types())
     total_votes.set(0)
     registration_fee.set(genesis_registration_fee)
-    config["selection_mode"] = selection_mode
-    config["max_validators"] = max_validators
-    config["power_mode"] = power_mode
-    config["rebalance_interval"] = rebalance_interval
-    config["activation_delay_epochs"] = activation_delay_epochs
-    config["unbonding_period_days"] = unbonding_period_days
-    config["min_self_bond"] = min_self_bond
-    config["min_total_bond"] = min_total_bond
-    config["max_commission_bps"] = max_commission_bps
-    config["max_active_set_churn"] = max_active_set_churn
-    config["min_bond_margin_bps"] = min_bond_margin_bps
-    config["manual_override_enabled"] = manual_override_enabled
-    config["slash_destination"] = slash_destination
-    config["duplicate_vote_slash_bps"] = duplicate_vote_slash_bps
-    config["duplicate_vote_jail"] = duplicate_vote_jail
-    config["light_client_attack_slash_bps"] = light_client_attack_slash_bps
-    config["light_client_attack_jail"] = light_client_attack_jail
+    seeded_policy = {
+        "selection_mode": selection_mode,
+        "max_validators": max_validators,
+        "power_mode": power_mode,
+        "rebalance_interval": rebalance_interval,
+        "activation_delay_epochs": activation_delay_epochs,
+        "unbonding_period_days": unbonding_period_days,
+        "min_self_bond": min_self_bond,
+        "min_total_bond": min_total_bond,
+        "max_commission_bps": max_commission_bps,
+        "max_active_set_churn": max_active_set_churn,
+        "min_bond_margin_bps": min_bond_margin_bps,
+        "manual_override_enabled": manual_override_enabled,
+        "slash_destination": slash_destination,
+        "duplicate_vote_slash_bps": duplicate_vote_slash_bps,
+        "duplicate_vote_jail": duplicate_vote_jail,
+        "light_client_attack_slash_bps": light_client_attack_slash_bps,
+        "light_client_attack_jail": light_client_attack_jail,
+        "max_new_power_bps": max_new_power_bps,
+        "downtime_jail_blocks": downtime_jail_blocks,
+        "downtime_slash_bps": downtime_slash_bps,
+        "downtime_unjail_cooldown_hours": downtime_unjail_cooldown_hours,
+    }
+    for key in POLICY_KEYS:
+        validate_policy_value(key, seeded_policy[key])
+        config[key] = seeded_policy[key]
 
     active_nodes = []
     for node in genesis_nodes:
@@ -507,144 +517,120 @@ def effective_commission_bps(account: str):
     return configured_bps
 
 
-def effective_selection_mode():
-    selection_mode = config["selection_mode"]
-    if selection_mode is None:
-        return DEFAULT_SELECTION_MODE
-    return selection_mode
+POLICY_KEYS = [
+    "selection_mode",
+    "max_validators",
+    "power_mode",
+    "rebalance_interval",
+    "activation_delay_epochs",
+    "unbonding_period_days",
+    "min_self_bond",
+    "min_total_bond",
+    "max_commission_bps",
+    "max_active_set_churn",
+    "min_bond_margin_bps",
+    "manual_override_enabled",
+    "slash_destination",
+    "duplicate_vote_slash_bps",
+    "duplicate_vote_jail",
+    "light_client_attack_slash_bps",
+    "light_client_attack_jail",
+    "max_new_power_bps",
+    "downtime_jail_blocks",
+    "downtime_slash_bps",
+    "downtime_unjail_cooldown_hours",
+]
+POLICY_DEFAULTS = {
+    "selection_mode": DEFAULT_SELECTION_MODE,
+    "max_validators": DEFAULT_MAX_VALIDATORS,
+    "power_mode": DEFAULT_POWER_MODE,
+    "rebalance_interval": DEFAULT_REBALANCE_INTERVAL,
+    "activation_delay_epochs": DEFAULT_ACTIVATION_DELAY_EPOCHS,
+    "unbonding_period_days": DEFAULT_UNBONDING_PERIOD_DAYS,
+    "min_self_bond": DEFAULT_MIN_SELF_BOND,
+    "min_total_bond": DEFAULT_MIN_TOTAL_BOND,
+    "max_commission_bps": MAX_COMMISSION_BPS,
+    "max_active_set_churn": DEFAULT_MAX_ACTIVE_SET_CHURN,
+    "min_bond_margin_bps": DEFAULT_MIN_BOND_MARGIN_BPS,
+    "manual_override_enabled": True,
+    "slash_destination": DEFAULT_SLASH_DESTINATION,
+    "duplicate_vote_slash_bps": DEFAULT_DUPLICATE_VOTE_SLASH_BPS,
+    "duplicate_vote_jail": True,
+    "light_client_attack_slash_bps": DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS,
+    "light_client_attack_jail": True,
+    "max_new_power_bps": DEFAULT_MAX_NEW_POWER_BPS,
+    "downtime_jail_blocks": DEFAULT_DOWNTIME_JAIL_BLOCKS,
+    "downtime_slash_bps": DEFAULT_DOWNTIME_SLASH_BPS,
+    "downtime_unjail_cooldown_hours": DEFAULT_DOWNTIME_UNJAIL_COOLDOWN_HOURS,
+}
+# [minimum, maximum or None] of each integer policy value.
+POLICY_INT_BOUNDS = {
+    "max_validators": [1, None],
+    "rebalance_interval": [1, None],
+    "activation_delay_epochs": [0, None],
+    "unbonding_period_days": [0, None],
+    "min_self_bond": [0, None],
+    "min_total_bond": [0, None],
+    "max_commission_bps": [0, MAX_COMMISSION_BPS],
+    "max_active_set_churn": [0, None],
+    "min_bond_margin_bps": [0, None],
+    "duplicate_vote_slash_bps": [0, 10000],
+    "light_client_attack_slash_bps": [0, 10000],
+    "max_new_power_bps": [0, 10000],
+    "downtime_jail_blocks": [1, None],
+    "downtime_slash_bps": [0, 10000],
+    "downtime_unjail_cooldown_hours": [0, None],
+}
+POLICY_CHOICES = {
+    "selection_mode": ["manual", "auto_top_n", "hybrid"],
+    "power_mode": ["equal", "requested", "stake_weighted"],
+}
 
 
-def effective_max_validators():
-    max_validators = config["max_validators"]
-    if max_validators is None:
-        return DEFAULT_MAX_VALIDATORS
-    if max_validators <= 0:
-        return DEFAULT_MAX_VALIDATORS
-    return max_validators
+def policy(key: str):
+    # A missing or out-of-range value (a state patch) reads as the default.
+    value = config[key]
+    bounds = POLICY_INT_BOUNDS.get(key)
+    if value is None or value == "":
+        return POLICY_DEFAULTS[key]
+    if bounds is not None and value < bounds[0]:
+        return POLICY_DEFAULTS[key]
+    return value
 
 
-def effective_power_mode():
-    power_mode = config["power_mode"]
-    if power_mode is None:
-        return DEFAULT_POWER_MODE
-    return power_mode
-
-
-def effective_min_self_bond():
-    min_self_bond = config["min_self_bond"]
-    if min_self_bond is None:
-        return DEFAULT_MIN_SELF_BOND
-    if min_self_bond < 0:
-        return DEFAULT_MIN_SELF_BOND
-    return min_self_bond
-
-
-def effective_min_total_bond():
-    min_total_bond = config["min_total_bond"]
-    if min_total_bond is None:
-        return DEFAULT_MIN_TOTAL_BOND
-    if min_total_bond < 0:
-        return DEFAULT_MIN_TOTAL_BOND
-    return min_total_bond
-
-
-def effective_rebalance_interval():
-    rebalance_interval = config["rebalance_interval"]
-    if rebalance_interval is None:
-        return DEFAULT_REBALANCE_INTERVAL
-    if rebalance_interval <= 0:
-        return DEFAULT_REBALANCE_INTERVAL
-    return rebalance_interval
-
-
-def effective_activation_delay_epochs():
-    activation_delay_epochs = config["activation_delay_epochs"]
-    if activation_delay_epochs is None:
-        return DEFAULT_ACTIVATION_DELAY_EPOCHS
-    if activation_delay_epochs < 0:
-        return DEFAULT_ACTIVATION_DELAY_EPOCHS
-    return activation_delay_epochs
-
-
-def effective_max_active_set_churn():
-    max_active_set_churn = config["max_active_set_churn"]
-    if max_active_set_churn is None:
-        return DEFAULT_MAX_ACTIVE_SET_CHURN
-    if max_active_set_churn < 0:
-        return DEFAULT_MAX_ACTIVE_SET_CHURN
-    return max_active_set_churn
-
-
-def effective_min_bond_margin_bps():
-    min_bond_margin_bps = config["min_bond_margin_bps"]
-    if min_bond_margin_bps is None:
-        return DEFAULT_MIN_BOND_MARGIN_BPS
-    if min_bond_margin_bps < 0:
-        return DEFAULT_MIN_BOND_MARGIN_BPS
-    return min_bond_margin_bps
-
-
-def effective_manual_override_enabled():
-    manual_override_enabled = config["manual_override_enabled"]
-    if manual_override_enabled is None:
-        return True
-    return manual_override_enabled
-
-
-def effective_slash_destination():
-    slash_destination = config["slash_destination"]
-    if slash_destination is None:
-        return DEFAULT_SLASH_DESTINATION
-    if slash_destination == "":
-        return DEFAULT_SLASH_DESTINATION
-    return slash_destination
-
-
-def effective_duplicate_vote_slash_bps():
-    slash_bps = config["duplicate_vote_slash_bps"]
-    if slash_bps is None:
-        return DEFAULT_DUPLICATE_VOTE_SLASH_BPS
-    if slash_bps < 0:
-        return DEFAULT_DUPLICATE_VOTE_SLASH_BPS
-    return slash_bps
-
-
-def effective_duplicate_vote_jail():
-    should_jail = config["duplicate_vote_jail"]
-    if should_jail is None:
-        return True
-    return should_jail
-
-
-def effective_light_client_attack_slash_bps():
-    slash_bps = config["light_client_attack_slash_bps"]
-    if slash_bps is None:
-        return DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS
-    if slash_bps < 0:
-        return DEFAULT_LIGHT_CLIENT_ATTACK_SLASH_BPS
-    return slash_bps
-
-
-def effective_light_client_attack_jail():
-    should_jail = config["light_client_attack_jail"]
-    if should_jail is None:
-        return True
-    return should_jail
+def validate_policy_value(key: str, value: Any):
+    if key in POLICY_CHOICES:
+        assert value in POLICY_CHOICES[key], "Bad " + key + "."
+        return
+    if key == "slash_destination":
+        validate_non_empty_string(value, key)
+        return
+    bounds = POLICY_INT_BOUNDS.get(key)
+    if bounds is None:
+        assert isinstance(value, bool), key + " must be boolean."
+        return
+    assert is_integer(value), key + " must be an integer."
+    assert value >= bounds[0], key + " is below its minimum."
+    assert bounds[1] is None or value <= bounds[1], key + " is above its maximum."
 
 
 def evidence_slash_bps(infraction_type: str):
     if infraction_type == "DUPLICATE_VOTE":
-        return effective_duplicate_vote_slash_bps()
+        return policy("duplicate_vote_slash_bps")
     if infraction_type == "LIGHT_CLIENT_ATTACK":
-        return effective_light_client_attack_slash_bps()
+        return policy("light_client_attack_slash_bps")
+    if infraction_type == "DOWNTIME":
+        return policy("downtime_slash_bps")
     return 0
 
 
 def evidence_should_jail(infraction_type: str):
+    if infraction_type == "DOWNTIME":
+        return True
     if infraction_type == "DUPLICATE_VOTE":
-        return effective_duplicate_vote_jail()
+        return policy("duplicate_vote_jail")
     if infraction_type == "LIGHT_CLIENT_ATTACK":
-        return effective_light_client_attack_jail()
+        return policy("light_client_attack_jail")
     return False
 
 
@@ -660,7 +646,7 @@ def current_block_number():
 
 
 def current_selection_epoch():
-    return current_block_number() // effective_rebalance_interval()
+    return current_block_number() // policy("rebalance_interval")
 
 
 def total_bonded(account: str):
@@ -886,14 +872,14 @@ def ready_for_selection(account: str, selection_epoch: int):
 
 def meets_min_bonds(account: str):
     return (
-        self_bond[account] >= effective_min_self_bond()
-        and total_bonded(account) >= effective_min_total_bond()
+        self_bond[account] >= policy("min_self_bond")
+        and total_bonded(account) >= policy("min_total_bond")
     )
 
 
 def require_min_bonds(account: str):
-    assert self_bond[account] >= effective_min_self_bond(), "Below the minimum self bond."
-    assert total_bonded(account) >= effective_min_total_bond(), "Below the minimum total bond."
+    assert self_bond[account] >= policy("min_self_bond"), "Below the minimum self bond."
+    assert total_bonded(account) >= policy("min_total_bond"), "Below the minimum total bond."
 
 
 def can_be_selected(account: str, selection_mode: str, selection_epoch: int):
@@ -978,14 +964,14 @@ def weakest_selected_incumbent(accounts: list, previous_active: list):
 
 
 def beats_margin(challenger: str, incumbent: str):
-    margin_bps = effective_min_bond_margin_bps()
+    margin_bps = policy("min_bond_margin_bps")
     challenger_bond = total_bonded(challenger)
     incumbent_bond = total_bonded(incumbent)
     return challenger_bond * 10000 > incumbent_bond * (10000 + margin_bps)
 
 
 def selected_validator_power(account: str):
-    power_mode = effective_power_mode()
+    power_mode = policy("power_mode")
     if power_mode == "requested":
         return effective_requested_power(account)
     if power_mode == "stake_weighted":
@@ -1008,13 +994,25 @@ def approve_candidate(account: str, power: int):
     statuses[account] = STATUS_APPROVED
     left_at[account] = None
     eligible_at_epoch[account] = (
-        current_selection_epoch() + effective_activation_delay_epochs()
+        current_selection_epoch() + policy("activation_delay_epochs")
     )
     ensure_candidate(account)
 
     requested_power[account] = power
     reward_keys[account] = effective_reward_key(account)
     return validator_record(account)
+
+
+def within_new_power_cap(accounts: list, previous_active: list):
+    # Newcomers' share of the set's power stays within max_new_power_bps.
+    total_power = 0
+    new_power = 0
+    for account in accounts:
+        power = selected_validator_power(account)
+        total_power += power
+        if account not in previous_active:
+            new_power += power
+    return new_power * 10000 <= policy("max_new_power_bps") * total_power
 
 
 def fill_empty_seats(
@@ -1031,13 +1029,47 @@ def fill_empty_seats(
             break
         if account in previous_active:
             continue
-        selected_accounts = insert_ranked_account(selected_accounts, account)
+        candidate_set = insert_ranked_account(selected_accounts, account)
+        if within_new_power_cap(candidate_set, previous_active) == False:
+            continue
+        selected_accounts = candidate_set
         churn_budget -= 1
     return selected_accounts, churn_budget
 
 
+def replace_incumbents(
+    selected_accounts: list,
+    ranked_accounts: list,
+    previous_active: list,
+    deactivated: list,
+    churn_budget: int,
+):
+    # A challenger replaces the weakest incumbent when it beats it by the
+    # margin, within the churn budget and the newcomer power cap.
+    for challenger in ranked_accounts:
+        if churn_budget <= 0:
+            break
+        if challenger in previous_active or challenger in selected_accounts:
+            continue
+        weakest_incumbent = weakest_selected_incumbent(selected_accounts, previous_active)
+        if weakest_incumbent is None:
+            break
+        if beats_margin(challenger, weakest_incumbent) == False:
+            continue
+        candidate_set = insert_ranked_account(
+            without_item(selected_accounts, weakest_incumbent), challenger
+        )
+        if within_new_power_cap(candidate_set, previous_active) == False:
+            continue
+        selected_accounts = candidate_set
+        if weakest_incumbent not in deactivated:
+            deactivated.append(weakest_incumbent)
+        churn_budget -= 1
+    return selected_accounts
+
+
 def rebalance_validator_set(force: bool = False, require_selection: bool = True):
-    selection_mode = effective_selection_mode()
+    selection_mode = policy("selection_mode")
     assert selection_mode != "manual", "Auto selection disabled."
     selection_epoch = current_selection_epoch()
     previous_rebalance_epoch = last_rebalance_epoch.get()
@@ -1051,8 +1083,8 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
     deactivated = []
     previous_active = active_nodes_list()
     next_candidates = []
-    max_validators = effective_max_validators()
-    replacement_budget = effective_max_active_set_churn()
+    max_validators = policy("max_validators")
+    replacement_budget = policy("max_active_set_churn")
 
     for account in previous_active:
         if account in ranked_accounts:
@@ -1073,27 +1105,9 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
     )
 
     if len(selected_accounts) >= max_validators and replacement_budget > 0:
-        for challenger in ranked_accounts:
-            if challenger in previous_active:
-                continue
-            if challenger in selected_accounts:
-                continue
-            weakest_incumbent = weakest_selected_incumbent(
-                selected_accounts,
-                previous_active,
-            )
-            if weakest_incumbent is None:
-                break
-            if beats_margin(challenger, weakest_incumbent) == False:
-                continue
-
-            selected_accounts = without_item(selected_accounts, weakest_incumbent)
-            if weakest_incumbent not in deactivated:
-                deactivated.append(weakest_incumbent)
-            selected_accounts = insert_ranked_account(selected_accounts, challenger)
-            replacement_budget -= 1
-            if replacement_budget <= 0:
-                break
+        selected_accounts = replace_incumbents(
+            selected_accounts, ranked_accounts, previous_active, deactivated, replacement_budget
+        )
 
     if len(selected_accounts) == 0:
         # An empty set would leave no members able to govern recovery.
@@ -1203,6 +1217,7 @@ def validator_record(account: str):
         "delegator_count": delegator_counts[account],
         "reward_per_share": reward_per_share[account],
         "reward_pool": reward_pool[account],
+        "missed_blocks": missed_blocks[account],
         "pending_unbond_count": unbond_count,
         "pending_unbond_total": unbond_total,
         "next_unbond_unlock_at": next_unbond_unlock_at,
@@ -1212,7 +1227,7 @@ def validator_record(account: str):
         "eligible_at_epoch": eligible_at_epoch[account],
         "selection_eligible_at_last_rebalance": can_be_selected(
             account,
-            effective_selection_mode(),
+            policy("selection_mode"),
             selection_epoch,
         ),
         "registered_at": registered_at[account],
@@ -1529,7 +1544,7 @@ def slash_validator(
     total_slashed[account] = total_slashed[account] + slash_amount
     last_slashed_at[account] = now
 
-    slash_destination = effective_slash_destination()
+    slash_destination = policy("slash_destination")
     if slash_amount > 0:
         currency.transfer(slash_amount, slash_destination)
 
@@ -1604,7 +1619,7 @@ def apply_evidence_penalty_internal(
         jailed_now = True
         state_changed = True
 
-    if state_changed and effective_selection_mode() != "manual":
+    if state_changed and policy("selection_mode") != "manual":
         rebalance_validator_set(force=True, require_selection=False)
 
     return {
@@ -1622,7 +1637,7 @@ def apply_evidence_penalty_internal(
 
 
 def validate_manual_override_policy(type_of_vote: str):
-    selection_mode = effective_selection_mode()
+    selection_mode = policy("selection_mode")
     if selection_mode == "manual":
         return
 
@@ -1637,7 +1652,7 @@ def validate_manual_override_policy(type_of_vote: str):
         or type_of_vote == "unjail_member"
     ):
         assert (
-            effective_manual_override_enabled() == True
+            policy("manual_override_enabled") == True
         ), "Overrides off."
 
 
@@ -1645,7 +1660,7 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
     if type_of_vote == "add_member":
         validate_non_empty_string(arg, "Member")
         validate_manual_override_policy(type_of_vote)
-        if effective_selection_mode() == "manual":
+        if policy("selection_mode") == "manual":
             assert (
                 pending_registrations[arg] == True or statuses[arg] == STATUS_APPROVED
             ), "Member must have pending registration."
@@ -1764,180 +1779,17 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
 
 
 def validate_policy_update(arg: Any):
-    policy_keys = [
-        "selection_mode",
-        "max_validators",
-        "power_mode",
-        "rebalance_interval",
-        "activation_delay_epochs",
-        "unbonding_period_days",
-        "min_self_bond",
-        "min_total_bond",
-        "max_commission_bps",
-        "max_active_set_churn",
-        "min_bond_margin_bps",
-        "manual_override_enabled",
-        "slash_destination",
-        "duplicate_vote_slash_bps",
-        "duplicate_vote_jail",
-        "light_client_attack_slash_bps",
-        "light_client_attack_jail",
-    ]
-    validate_object_argument(arg, policy_keys, [])
+    validate_object_argument(arg, POLICY_KEYS, [])
     assert len(arg) > 0, "Policy update must not be empty."
-
-    selection_mode = arg.get("selection_mode")
-    if selection_mode is not None:
-        assert selection_mode in ["manual", "auto_top_n", "hybrid"], "Bad selection mode."
-
-    max_validators = arg.get("max_validators")
-    if max_validators is not None:
-        assert is_integer(max_validators), "max_validators must be an integer."
-        assert max_validators > 0, "max_validators <= 0"
-
-    power_mode = arg.get("power_mode")
-    if power_mode is not None:
-        assert power_mode in ["equal", "requested", "stake_weighted"], "Bad power mode."
-
-    rebalance_interval = arg.get("rebalance_interval")
-    if rebalance_interval is not None:
-        assert is_integer(rebalance_interval), "rebalance_interval must be an integer."
-        assert rebalance_interval > 0, "rebalance_interval <= 0"
-
-    activation_delay_epochs = arg.get("activation_delay_epochs")
-    if activation_delay_epochs is not None:
-        assert is_integer(activation_delay_epochs), "activation_delay_epochs must be an integer."
-        assert activation_delay_epochs >= 0, "activation_delay_epochs < 0"
-
-    unbonding_period_days = arg.get("unbonding_period_days")
-    if unbonding_period_days is not None:
-        assert is_integer(unbonding_period_days), "unbonding_period_days must be an integer."
-        assert unbonding_period_days >= 0, "unbonding_period_days < 0"
-
-    min_self_bond = arg.get("min_self_bond")
-    if min_self_bond is not None:
-        assert is_integer(min_self_bond), "min_self_bond must be an integer."
-        assert min_self_bond >= 0, "min_self_bond < 0"
-
-    min_total_bond = arg.get("min_total_bond")
-    if min_total_bond is not None:
-        assert is_integer(min_total_bond), "min_total_bond must be an integer."
-        assert min_total_bond >= 0, "min_total_bond < 0"
-
-    max_commission_bps = arg.get("max_commission_bps")
-    if max_commission_bps is not None:
-        assert is_integer(max_commission_bps), "max_commission_bps must be an integer."
-        assert max_commission_bps >= 0, "max_comm < 0"
-        assert max_commission_bps <= MAX_COMMISSION_BPS, "max_comm high"
-
-    max_active_set_churn = arg.get("max_active_set_churn")
-    if max_active_set_churn is not None:
-        assert is_integer(max_active_set_churn), "max_active_set_churn must be an integer."
-        assert max_active_set_churn >= 0, "max_churn < 0"
-
-    min_bond_margin_bps = arg.get("min_bond_margin_bps")
-    if min_bond_margin_bps is not None:
-        assert is_integer(min_bond_margin_bps), "min_bond_margin_bps must be an integer."
-        assert min_bond_margin_bps >= 0, "margin_bps < 0"
-
-    manual_override_enabled = arg.get("manual_override_enabled")
-    if manual_override_enabled is not None:
-        assert isinstance(manual_override_enabled, bool), "manual_override_enabled must be boolean."
-
-    slash_destination = arg.get("slash_destination")
-    if slash_destination is not None:
-        assert isinstance(slash_destination, str), "slash_destination must be a string."
-        assert slash_destination != "", "empty slash dst"
-
-    duplicate_vote_slash_bps = arg.get("duplicate_vote_slash_bps")
-    if duplicate_vote_slash_bps is not None:
-        assert is_integer(duplicate_vote_slash_bps), "duplicate_vote_slash_bps must be an integer."
-        assert duplicate_vote_slash_bps >= 0, "dv bps < 0"
-        assert duplicate_vote_slash_bps <= 10000, "dv bps > 10000"
-
-    light_client_attack_slash_bps = arg.get("light_client_attack_slash_bps")
-    if light_client_attack_slash_bps is not None:
-        assert is_integer(light_client_attack_slash_bps), "light_client_attack_slash_bps must be an integer."
-        assert light_client_attack_slash_bps >= 0, "lca bps < 0"
-        assert light_client_attack_slash_bps <= 10000, "lca bps > 10000"
-
-    duplicate_vote_jail = arg.get("duplicate_vote_jail")
-    if duplicate_vote_jail is not None:
-        assert isinstance(duplicate_vote_jail, bool), "duplicate_vote_jail must be boolean."
-
-    light_client_attack_jail = arg.get("light_client_attack_jail")
-    if light_client_attack_jail is not None:
-        assert isinstance(light_client_attack_jail, bool), "light_client_attack_jail must be boolean."
+    for key in POLICY_KEYS:
+        if arg.get(key) is not None:
+            validate_policy_value(key, arg[key])
 
 
 def apply_policy_update(arg: Any):
-    selection_mode = arg.get("selection_mode")
-    if selection_mode is not None:
-        config["selection_mode"] = selection_mode
-
-    max_validators = arg.get("max_validators")
-    if max_validators is not None:
-        config["max_validators"] = max_validators
-
-    power_mode = arg.get("power_mode")
-    if power_mode is not None:
-        config["power_mode"] = power_mode
-
-    rebalance_interval = arg.get("rebalance_interval")
-    if rebalance_interval is not None:
-        config["rebalance_interval"] = rebalance_interval
-
-    activation_delay_epochs = arg.get("activation_delay_epochs")
-    if activation_delay_epochs is not None:
-        config["activation_delay_epochs"] = activation_delay_epochs
-
-    unbonding_period_days = arg.get("unbonding_period_days")
-    if unbonding_period_days is not None:
-        config["unbonding_period_days"] = unbonding_period_days
-
-    min_self_bond = arg.get("min_self_bond")
-    if min_self_bond is not None:
-        config["min_self_bond"] = min_self_bond
-
-    min_total_bond = arg.get("min_total_bond")
-    if min_total_bond is not None:
-        config["min_total_bond"] = min_total_bond
-
-    max_commission_bps = arg.get("max_commission_bps")
-    if max_commission_bps is not None:
-        config["max_commission_bps"] = max_commission_bps
-
-    max_active_set_churn = arg.get("max_active_set_churn")
-    if max_active_set_churn is not None:
-        config["max_active_set_churn"] = max_active_set_churn
-
-    min_bond_margin_bps = arg.get("min_bond_margin_bps")
-    if min_bond_margin_bps is not None:
-        config["min_bond_margin_bps"] = min_bond_margin_bps
-
-    manual_override_enabled = arg.get("manual_override_enabled")
-    if manual_override_enabled is not None:
-        config["manual_override_enabled"] = manual_override_enabled
-
-    slash_destination = arg.get("slash_destination")
-    if slash_destination is not None:
-        config["slash_destination"] = slash_destination
-
-    duplicate_vote_slash_bps = arg.get("duplicate_vote_slash_bps")
-    if duplicate_vote_slash_bps is not None:
-        config["duplicate_vote_slash_bps"] = duplicate_vote_slash_bps
-
-    duplicate_vote_jail = arg.get("duplicate_vote_jail")
-    if duplicate_vote_jail is not None:
-        config["duplicate_vote_jail"] = duplicate_vote_jail
-
-    light_client_attack_slash_bps = arg.get("light_client_attack_slash_bps")
-    if light_client_attack_slash_bps is not None:
-        config["light_client_attack_slash_bps"] = light_client_attack_slash_bps
-
-    light_client_attack_jail = arg.get("light_client_attack_jail")
-    if light_client_attack_jail is not None:
-        config["light_client_attack_jail"] = light_client_attack_jail
+    for key in POLICY_KEYS:
+        if arg.get(key) is not None:
+            config[key] = arg[key]
 
 
 @export
@@ -2076,7 +1928,7 @@ def can_add_member(member: str):
         return False
     if pending_registrations[member] == True:
         return True
-    return effective_selection_mode() == "manual" and statuses[member] == STATUS_APPROVED
+    return policy("selection_mode") == "manual" and statuses[member] == STATUS_APPROVED
 
 
 def can_jail_member(member: str):
@@ -2112,25 +1964,25 @@ def finalize_vote(proposal_id: int):
     if current_vote["type"] == "add_member":
         member = current_vote["arg"]
         member_power = current_vote["member_power"]
-        if effective_selection_mode() == "manual":
+        if policy("selection_mode") == "manual":
             activate_member(member, member_power)
         else:
             approve_candidate(member, member_power)
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "remove_member":
         exit_validator(current_vote["arg"], STATUS_REMOVED, True)
-        if effective_selection_mode() != "manual":
+        if policy("selection_mode") != "manual":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "jail_member":
         jail_validator(
             current_vote["arg"]["member"],
             current_vote["arg"].get("reason"),
         )
-        if effective_selection_mode() != "manual":
+        if policy("selection_mode") != "manual":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "unjail_member":
         unjail_validator(current_vote["arg"])
-        if effective_selection_mode() != "manual":
+        if policy("selection_mode") != "manual":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "slash_member":
         current_vote["result"] = slash_validator(
@@ -2139,20 +1991,20 @@ def finalize_vote(proposal_id: int):
             current_vote["arg"].get("reason"),
             current_vote["arg"].get("infraction_height"),
         )
-        if effective_selection_mode() != "manual":
+        if policy("selection_mode") != "manual":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "set_member_power":
         member = current_vote["arg"]["member"]
         power = current_vote["arg"]["power"]
         requested_power[member] = power
-        if effective_selection_mode() == "manual":
+        if policy("selection_mode") == "manual":
             powers[member] = power
             require_total_power_within_limit()
-        elif effective_power_mode() == "requested":
+        elif policy("power_mode") == "requested":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "update_policy":
         apply_policy_update(current_vote["arg"])
-        if effective_selection_mode() != "manual":
+        if policy("selection_mode") != "manual":
             rebalance_validator_set(force=True)
     elif current_vote["type"] == "reward_change":
         rewards.set_value(new_value=current_vote["arg"])
@@ -2263,25 +2115,10 @@ def get_validator(account: str):
 
 @export
 def get_policy_config():
-    return {
-        "selection_mode": config["selection_mode"],
-        "max_validators": config["max_validators"],
-        "power_mode": config["power_mode"],
-        "rebalance_interval": config["rebalance_interval"],
-        "activation_delay_epochs": config["activation_delay_epochs"],
-        "unbonding_period_days": config["unbonding_period_days"],
-        "min_self_bond": config["min_self_bond"],
-        "min_total_bond": config["min_total_bond"],
-        "max_commission_bps": config["max_commission_bps"],
-        "max_active_set_churn": config["max_active_set_churn"],
-        "min_bond_margin_bps": config["min_bond_margin_bps"],
-        "manual_override_enabled": config["manual_override_enabled"],
-        "slash_destination": config["slash_destination"],
-        "duplicate_vote_slash_bps": config["duplicate_vote_slash_bps"],
-        "duplicate_vote_jail": config["duplicate_vote_jail"],
-        "light_client_attack_slash_bps": config["light_client_attack_slash_bps"],
-        "light_client_attack_jail": config["light_client_attack_jail"],
-    }
+    policy_config = {}
+    for key in POLICY_KEYS:
+        policy_config[key] = config[key]
+    return policy_config
 
 
 @export
@@ -2333,6 +2170,57 @@ def apply_evidence_penalty(
         evidence_id=evidence_id,
         evidence_height=evidence_height,
     )
+
+
+def active_power(accounts: list):
+    total = 0
+    for account in accounts:
+        total += effective_active_power(account)
+    return total
+
+
+def jail_for_downtime(account: str):
+    missed_blocks[account] = 0
+    apply_evidence_penalty_internal(
+        account=account,
+        infraction_type="DOWNTIME",
+        evidence_id="downtime-" + account + "-" + str(current_block_number()),
+        evidence_height=current_block_number(),
+    )
+
+
+@export
+def record_liveness(absent: list):
+    # Called by FinalizeBlock with the validators whose signature is absent
+    # from the decided last commit (when any is, or a count is open).
+    assert ctx.caller == SYSTEM_LIVENESS_CALLER, "Driver only."
+    members = active_nodes_list()
+    absent_members = []
+    for account in members:
+        if account in absent:
+            absent_members.append(account)
+        elif missed_blocks[account] != 0:
+            missed_blocks[account] = 0
+    # More than a third absent is a partition, not one validator's downtime.
+    partition = active_power(absent_members) * 3 > active_power(members)
+    jailed_now = []
+    for account in absent_members:
+        missed_blocks[account] = missed_blocks[account] + 1
+        if partition == False and missed_blocks[account] >= policy("downtime_jail_blocks"):
+            jail_for_downtime(account)
+            jailed_now.append(account)
+    return {"absent": absent_members, "partition": partition, "jailed": jailed_now}
+
+
+@export
+def unjail():
+    account = ctx.caller
+    assert is_jailed(account), "Not jailed."
+    assert jail_reasons[account] == "downtime", "Only a downtime jail can be lifted by the validator."
+    cooldown = datetime.timedelta(hours=policy("downtime_unjail_cooldown_hours"))
+    assert now >= last_jailed_at[account] + cooldown, "Unjail cooldown not over."
+    unjail_validator(account)
+    return validator_record(account)
 
 
 @export
@@ -2451,11 +2339,11 @@ def register(
     registered_at[ctx.caller] = now
     joined_at[ctx.caller] = None
     left_at[ctx.caller] = None
-    if effective_selection_mode() == "manual":
+    if policy("selection_mode") == "manual":
         eligible_at_epoch[ctx.caller] = 0
     else:
         eligible_at_epoch[ctx.caller] = (
-            current_selection_epoch() + effective_activation_delay_epochs()
+            current_selection_epoch() + policy("activation_delay_epochs")
         )
     pending_leave[ctx.caller] = False
     self_bond[ctx.caller] = self_bond[ctx.caller]

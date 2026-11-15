@@ -1,0 +1,222 @@
+"""Liveness and activation safety: downtime jailing and the activation power cap."""
+
+import json
+from pathlib import Path
+
+import pytest
+from contracting.local import ContractingClient
+from xian_runtime_types.time import Datetime
+
+ROOT = Path(__file__).resolve().parents[1]
+CONTRACTS_DIR = ROOT / "contracts"
+NODES = [f"{index:02x}" * 32 for index in range(0xA1, 0xA7)]
+CANDIDATES = [f"{index:02x}" * 32 for index in range(0x10, 0x16)]
+DRIVER = "__liveness_driver__"
+START = Datetime(2026, 1, 1)
+
+
+@pytest.fixture
+def client(tmp_path):
+    client = ContractingClient(storage_home=tmp_path)
+    client.flush()
+    return client
+
+
+def _submit(client, name, args=None):
+    source = (CONTRACTS_DIR / f"{name}.s.py").read_text(encoding="utf-8")
+    client.submit(source, name=name, constructor_args=args or {})
+    return client.get_contract_proxy(name)
+
+
+def _deploy(client, nodes=4, **policy):
+    currency = _submit(client, "currency", {"vk": "founder"})
+    for name in ("dao", "rewards"):
+        _submit(client, name)
+    _submit(client, "chi_cost", {"initial_rate": 20})
+    validators = _submit(
+        client,
+        "validators",
+        {"genesis_nodes": NODES[:nodes], "genesis_registration_fee": 1000, **policy},
+    )
+    return currency, validators
+
+
+def _record(validators, absent, block=1, now=START):
+    return validators.record_liveness(
+        absent=absent, signer=DRIVER, environment={"block_num": block, "now": now}
+    )
+
+
+def test_only_the_liveness_driver_records_liveness(client):
+    _, validators = _deploy(client)
+    with pytest.raises(AssertionError, match="Driver only"):
+        validators.record_liveness(absent=[NODES[0]], signer=NODES[1])
+
+
+def test_a_signature_resets_the_consecutive_missed_count(client):
+    _, validators = _deploy(client, downtime_jail_blocks=5)
+    for block in range(1, 4):
+        _record(validators, [NODES[0]], block)
+    assert validators.get_validator(account=NODES[0])["missed_blocks"] == 3
+
+    _record(validators, [NODES[1]], 4)
+
+    assert validators.get_validator(account=NODES[0])["missed_blocks"] == 0
+    assert validators.get_validator(account=NODES[1])["missed_blocks"] == 1
+
+
+def test_a_validator_absent_for_the_downtime_window_is_jailed_without_slash(client):
+    currency, validators = _deploy(client, downtime_jail_blocks=3)
+    currency.transfer(amount=100, to=NODES[0], signer="founder")
+    currency.approve(amount=100, to="validators", signer=NODES[0])
+    validators.bond_self(amount=100, signer=NODES[0])
+
+    for block in range(1, 3):
+        _record(validators, [NODES[0]], block)
+    assert NODES[0] in validators.get_members()
+    _record(validators, [NODES[0]], 3)
+
+    record = validators.get_validator(account=NODES[0])
+    assert NODES[0] not in validators.get_members()
+    assert record["jailed"] is True and record["jail_reason"] == "downtime"
+    assert record["power"] == 0 and record["self_bond"] == 100
+    assert record["missed_blocks"] == 0
+
+
+def test_a_configured_downtime_slash_is_applied(client):
+    currency, validators = _deploy(client, downtime_jail_blocks=1, downtime_slash_bps=100)
+    currency.transfer(amount=100, to=NODES[0], signer="founder")
+    currency.approve(amount=100, to="validators", signer=NODES[0])
+    validators.bond_self(amount=100, signer=NODES[0])
+
+    _record(validators, [NODES[0]], 1)
+
+    assert validators.get_validator(account=NODES[0])["self_bond"] == 99
+
+
+def test_no_one_is_jailed_while_a_third_of_the_power_is_absent(client):
+    _, validators = _deploy(client, nodes=6, downtime_jail_blocks=2)
+    for block in range(1, 5):
+        _record(validators, NODES[:2], block)  # 2 of 6 = 1/3: not more
+
+    # Exactly a third absent is individual downtime: both are jailed.
+    assert validators.get_members() == NODES[2:6]
+    for block in range(5, 8):
+        _record(validators, NODES[2:5], block)  # 3 of 4 active: a partition
+
+    assert len(validators.get_members()) == 4
+
+
+def test_the_last_active_validator_is_never_jailed_for_downtime(client):
+    _, validators = _deploy(client, nodes=1, downtime_jail_blocks=1)
+
+    _record(validators, [NODES[0]], 1)
+
+    assert validators.get_members() == [NODES[0]]
+
+
+def test_a_downtime_jailed_validator_unjails_itself_after_the_cooldown(client):
+    _, validators = _deploy(client, downtime_jail_blocks=1, downtime_unjail_cooldown_hours=2)
+    _record(validators, [NODES[0]], 1, now=START)
+
+    with pytest.raises(AssertionError, match="cooldown"):
+        validators.unjail(signer=NODES[0], environment={"now": Datetime(2026, 1, 1, 1)})
+    validators.unjail(signer=NODES[0], environment={"now": Datetime(2026, 1, 1, 2)})
+
+    record = validators.get_validator(account=NODES[0])
+    assert record["jailed"] is False
+    # Manual selection: back to an approved candidate; governance re-adds it.
+    assert record["status"] == "approved" and NODES[0] not in validators.get_members()
+
+
+def test_only_downtime_jails_can_be_lifted_by_the_validator(client):
+    _, validators = _deploy(client)
+    validators.apply_evidence_penalty(
+        member=NODES[0],
+        infraction_type="DUPLICATE_VOTE",
+        evidence_id="ev-1",
+        signer="__evidence_penalty_driver__",
+    )
+    assert validators.get_validator(account=NODES[0])["jailed"] is True
+
+    with pytest.raises(AssertionError, match="downtime"):
+        validators.unjail(signer=NODES[0], environment={"now": Datetime(2027, 1, 1)})
+
+
+def _register(client, currency, validators, account, bond):
+    currency.transfer(amount=1000 + bond, to=account, signer="founder")
+    currency.approve(amount=1000 + bond, to="validators", signer=account)
+    validators.register(signer=account)
+    validators.bond_self(amount=bond, signer=account)
+
+
+def test_newcomers_add_at_most_the_new_power_cap_per_rebalance(client):
+    currency, validators = _deploy(
+        client,
+        selection_mode="auto_top_n",
+        max_validators=10,
+        max_active_set_churn=5,
+        max_new_power_bps=2000,
+    )
+    for account in CANDIDATES[:4]:
+        _register(client, currency, validators, account, bond=10)
+
+    result = validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    # 4 incumbents of equal power: one newcomer is 1/5 of the new set.
+    assert len(result["activated"]) == 1
+    assert len(validators.get_members()) == 5
+
+
+def test_the_power_cap_also_limits_replacements(client):
+    currency, validators = _deploy(
+        client,
+        selection_mode="auto_top_n",
+        max_validators=4,
+        max_active_set_churn=4,
+        max_new_power_bps=2500,
+    )
+    for account in CANDIDATES[:4]:
+        _register(client, currency, validators, account, bond=10)
+
+    validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    assert sum(account in validators.get_members() for account in CANDIDATES) == 1
+
+
+def test_mainnet_pins_the_liveness_policy():
+    bundle = json.loads((CONTRACTS_DIR / "contracts_mainnet.json").read_text())
+    [entry] = [c for c in bundle["contracts"] if c["name"] == "validators"]
+    args = entry["constructor_args"]
+
+    assert args["max_new_power_bps"] == 2000
+    assert 0 < args["downtime_jail_blocks"] < args["rebalance_interval"]
+    assert args["downtime_slash_bps"] == 0
+    assert args["downtime_unjail_cooldown_hours"] > 0
+
+
+@pytest.mark.parametrize(
+    "arg,message",
+    [
+        ({"max_new_power_bps": 10001}, "max_new_power_bps"),
+        ({"downtime_jail_blocks": 0}, "downtime_jail_blocks"),
+        ({"downtime_slash_bps": -1}, "downtime_slash_bps"),
+        ({"downtime_unjail_cooldown_hours": -1}, "downtime_unjail_cooldown_hours"),
+    ],
+)
+def test_policy_updates_validate_the_liveness_keys(client, arg, message):
+    _, validators = _deploy(client)
+    with pytest.raises(AssertionError, match=message):
+        validators.propose_vote(type_of_vote="update_policy", arg=arg, signer=NODES[0])
+
+
+def test_policy_updates_set_the_liveness_keys(client):
+    _, validators = _deploy(client, nodes=1)
+    validators.propose_vote(
+        type_of_vote="update_policy",
+        arg={"max_new_power_bps": 1000, "downtime_jail_blocks": 7},
+        signer=NODES[0],
+    )
+
+    config = validators.get_policy_config()
+    assert config["max_new_power_bps"] == 1000 and config["downtime_jail_blocks"] == 7
