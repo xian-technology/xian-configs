@@ -44,6 +44,69 @@ def test_a_missing_or_non_canonical_fee_policy_is_rejected(tmp_path, fee_policy)
         validate_manifests.validate_pinned_fee_policy(path, read_network_manifest(path))
 
 
+def _local_manifest(tmp_path: Path, **changes) -> tuple[Path, dict]:
+    manifest = json.loads((ROOT / "networks" / "local" / "manifest.json").read_text()) | changes
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+    return path, read_network_manifest(path)
+
+
+def _built_genesis_sha256(manifest: dict) -> str:
+    from xian.genesis_builder import build_bundle_network_genesis
+    from xian.node_setup import genesis_sha256
+
+    return genesis_sha256(
+        build_bundle_network_genesis(
+            chain_id=manifest["chain_id"],
+            network=manifest["genesis"]["bundle"],
+            contracts_dir=ROOT / "contracts",
+            genesis_time=manifest["genesis"]["genesis_time"],
+            runtime_features=manifest.get("runtime_features"),
+            fee_policy=manifest["fee_policy"],
+        )
+    )
+
+
+def test_a_pinned_genesis_sha256_must_be_the_genesis_the_bundle_builds(tmp_path):
+    _, unpinned = _local_manifest(tmp_path)
+    path, pinned = _local_manifest(tmp_path, genesis_sha256=_built_genesis_sha256(unpinned))
+    validate_manifests.validate_pinned_genesis(path, pinned)
+
+    path, stale = _local_manifest(tmp_path, genesis_sha256="0" * 64)
+    with pytest.raises(SystemExit, match="genesis_sha256 mismatch"):
+        validate_manifests.validate_pinned_genesis(path, stale)
+
+
+def _mainnet_build(**changes) -> dict:
+    manifest = json.loads((ROOT / "networks" / "mainnet" / "manifest.json").read_text())
+    return manifest["genesis_build"] | changes
+
+
+def test_a_draft_mainnet_lists_the_genesis_pin_as_a_finalization_item(tmp_path):
+    path, draft = _local_manifest(tmp_path, genesis_build=_mainnet_build())
+    validate_manifests.validate_mainnet_genesis_pin(path, draft)
+
+    items = [
+        item for item in _mainnet_build()["finalization_required"] if "genesis_sha256" not in item
+    ]
+    path, forgotten = _local_manifest(
+        tmp_path, genesis_build=_mainnet_build(finalization_required=items)
+    )
+    with pytest.raises(SystemExit, match="finalization item"):
+        validate_manifests.validate_mainnet_genesis_pin(path, forgotten)
+
+
+def test_a_final_mainnet_must_pin_genesis_sha256(tmp_path):
+    path, final = _local_manifest(tmp_path, genesis_build=_mainnet_build(status="final"))
+    with pytest.raises(SystemExit, match="must pin genesis_sha256"):
+        validate_manifests.validate_mainnet_genesis_pin(path, final)
+
+    path, pinned = _local_manifest(
+        tmp_path, genesis_build=_mainnet_build(status="final"), genesis_sha256="ab" * 32
+    )
+    validate_manifests.validate_mainnet_genesis_pin(path, pinned)
+
+
 def _canonical(tmp_path: Path, network: str, **changes) -> tuple[Path, dict]:
     network_dir = shutil.copytree(ROOT / "networks" / network, tmp_path / network)
     path = network_dir / "manifest.json"

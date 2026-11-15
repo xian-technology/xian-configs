@@ -43,7 +43,8 @@
       "replace the draft allocation with the accepted launch allocation",
       "publish the final bootstrap seed",
       "refresh node_release_manifest and image pins from the stable release train",
-      "pin approved ceremony-derived shielded artifacts or keep the catalog empty"
+      "pin approved ceremony-derived shielded artifacts or keep the catalog empty",
+      "pin genesis_sha256 to the final genesis (sha256 of the config/genesis.json that xian node init installs; node init prints it) and publish it through a separate channel"
     ]
   },
   "snapshot_url": null,

@@ -63,6 +63,8 @@ REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS = (
 )
 
 try:
+    from xian.genesis_builder import build_bundle_network_genesis
+    from xian.node_setup import genesis_sha256
     from xian_cli.models import (
         read_network_manifest,
         read_network_template,
@@ -634,6 +636,47 @@ def validate_pinned_fee_policy(manifest_path: Path, manifest: dict) -> None:
         )
 
 
+def validate_pinned_genesis(manifest_path: Path, manifest: dict) -> None:
+    """A pinned genesis_sha256 must be the genesis the manifest's bundle builds today."""
+    pinned = manifest["genesis_sha256"]
+    if pinned is None:
+        return
+    genesis = manifest["genesis"]
+    if genesis["kind"] != "bundle":
+        raise SystemExit(
+            f"canonical manifests pin genesis_sha256 only for bundle genesis in {manifest_path}"
+        )
+    built = genesis_sha256(
+        build_bundle_network_genesis(
+            chain_id=manifest["chain_id"],
+            network=genesis["bundle"],
+            contracts_dir=REPO_ROOT / "contracts",
+            genesis_time=genesis["genesis_time"],
+            runtime_features=manifest["runtime_features"],
+            fee_policy=manifest["fee_policy"],
+        )
+    )
+    if built != pinned:
+        raise SystemExit(
+            f"genesis_sha256 mismatch in {manifest_path}: pinned {pinned}, the "
+            f"{genesis['bundle']} bundle builds {built}"
+        )
+
+
+def validate_mainnet_genesis_pin(manifest_path: Path, manifest: dict) -> None:
+    """A draft mainnet must list the pin as a finalization item; a final one must pin it."""
+    genesis_build = manifest["genesis_build"] or {}
+    if genesis_build.get("status") == "draft-rehearsal":
+        if not any("genesis_sha256" in item for item in genesis_build["finalization_required"]):
+            raise SystemExit(
+                "draft mainnet must list pinning genesis_sha256 as a finalization item "
+                f"in {manifest_path}"
+            )
+        return
+    if manifest["genesis_sha256"] is None:
+        raise SystemExit(f"canonical mainnet must pin genesis_sha256 in {manifest_path}")
+
+
 def _validate_bundle_genesis(manifest_path: Path, manifest: dict, *, network: str) -> None:
     genesis = manifest["genesis"]
     if genesis["kind"] != "bundle" or genesis["bundle"] != network:
@@ -694,6 +737,7 @@ def validate_canonical_mainnet(manifest_path: Path, manifest: dict) -> None:
             f"canonical mainnet chain_id must be {CANONICAL_MAINNET_CHAIN_ID} in {manifest_path}"
         )
     _validate_bundle_genesis(manifest_path, manifest, network="mainnet")
+    validate_mainnet_genesis_pin(manifest_path, manifest)
     if manifest.get("runtime_features") != {"zk": True}:
         raise SystemExit(
             f"canonical mainnet must explicitly enable the zk runtime feature in {manifest_path}"
@@ -716,6 +760,7 @@ def validate_network_manifests() -> None:
     for manifest_path in manifest_paths:
         manifest = read_network_manifest(manifest_path)
         validate_pinned_fee_policy(manifest_path, manifest)
+        validate_pinned_genesis(manifest_path, manifest)
         validate_privacy_artifact_catalog(
             manifest_path=manifest_path,
             manifest=manifest,
