@@ -337,3 +337,23 @@ def test_a_validator_added_by_governance_starts_with_no_missed_blocks(client):
 
     assert CANDIDATES[0] in validators.get_members()
     assert validators.get_validator(account=CANDIDATES[0])["missed_blocks"] == 0
+
+
+def test_a_newcomer_that_filled_a_seat_does_not_also_replace(client):
+    currency, validators = _deploy(
+        client,
+        selection_mode="auto_top_n",
+        max_validators=5,
+        max_active_set_churn=2,
+        min_bond_margin_bps=0,
+        max_new_power_bps=10000,
+    )
+    _register(client, currency, validators, CANDIDATES[0], bond=20)
+    _register(client, currency, validators, CANDIDATES[1], bond=10)
+
+    validators.rebalance(signer=NODES[0], environment={"block_num": 1})
+
+    # One seat filled (the stronger), one unbonded incumbent replaced.
+    members = validators.get_members()
+    assert len(members) == len(set(members)) == 5
+    assert CANDIDATES[0] in members and CANDIDATES[1] in members
