@@ -13,7 +13,8 @@
 - `mainnet_allocations.json` is the source file for mainnet currency genesis
   balances. Run `../scripts/sync-mainnet-allocations.py` after editing it, then
   validate with `../scripts/validate-manifests.py`. Each holder appears once,
-  as a lowercase 64-hex account key or a contract name, with its balance as a
+  as a lowercase 64-hex account key or a system contract name (a `con_` name
+  is refused: its first deployer would own the balance), with its balance as a
   plain decimal string (no sign or exponent, at most 30 fractional digits).
   Anything else is refused, so every balance reaches genesis exactly as
   written; the sync prints the holder count and total supply to check against

@@ -59,6 +59,8 @@ def test_exact_decimal_strings_are_kept_digit_for_digit(tmp_path):
         f'{{"{KEY[:-1]}": "1"}}',
         f'{{"{KEY[:32]}": "1"}}',
         '{"": "1"}',
+        # Not deployed at genesis: whoever first submits con_pairs owns it.
+        '{"con_pairs": "1"}',
     ),
     ids=(
         "duplicate-holder",
@@ -72,6 +74,7 @@ def test_exact_decimal_strings_are_kept_digit_for_digit(tmp_path):
         "short-key",
         "half-key",
         "empty-account",
+        "undeployed-user-contract",
     ),
 )
 def test_entries_that_would_not_reach_genesis_exactly_are_refused(

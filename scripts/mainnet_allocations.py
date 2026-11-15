@@ -24,6 +24,9 @@ ACCOUNT_KEY = re.compile(r"[0-9a-f]{64}")
 ACCOUNT_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 # A name made only of hex digits this long is a mangled key, not a contract.
 MANGLED_KEY_LENGTH = 32
+# Anyone may deploy a con_ name after genesis and so spend its balance; the
+# genesis bundle deploys only system names.
+USER_CONTRACT_PREFIX = "con_"
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -55,6 +58,11 @@ def require_account(account: Any) -> str:
         and all(character in "0123456789abcdef" for character in account)
     ):
         raise ValueError(f"allocation account looks like a truncated key: {account!r}")
+    if account.startswith(USER_CONTRACT_PREFIX):
+        raise ValueError(
+            f"allocation account {account!r} is a user contract name the first "
+            "deployer of that name would control"
+        )
     return account
 
 
