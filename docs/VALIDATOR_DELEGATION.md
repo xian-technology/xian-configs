@@ -16,8 +16,10 @@ The canonical contract source remains
 - The active validator set is the on-chain list `validators.active_validators`.
 - ABCI reads `validators.active_validators` and optional
   `validators.powers:<vk>` to build CometBFT validator updates.
-- Validator rewards are distributed off-chain in ABCI and currently pay the
-  validator reward key directly, optionally weighted by `powers`.
+- Fee rewards are computed by the block executor (vm-core `tx_rewards`): each
+  active validator's allotment (by `powers`) pays its operator reward key and
+  credits its delegation pool; delegators are paid lazily by the contract
+  (reward per share, see Reward Distribution).
 - Generic staking contracts exist in `xian-contracts`, but they are not the
   consensus validator registry and they do not model validator delegation.
 
@@ -39,7 +41,6 @@ The canonical contract source remains
 - Jailing with evidence integration.
 - Stake-weighted CometBFT voting power.
 - Per-block validator-set churn.
-- High-scale reward indexing for thousands of delegators.
 
 ## Operating Modes
 
@@ -53,9 +54,10 @@ The validator policy contract must support the following modes:
   Governance controls validator eligibility and the active set is chosen as the
   top `N` among approved and eligible validators.
 
-The recommended default for curated public networks is `hybrid`. The current
-mainnet preparation uses `auto_top_n` because validator admission should be
-driven by total bonded stake rather than governance approval.
+The recommended default for curated public networks is `hybrid`. Mainnet
+starts in `manual` mode with a non-zero minimum stake (see Mainnet Prepared
+Profile); moving to `hybrid` or `auto_top_n` later is one `update_policy`
+vote (see Switching Selection Mode).
 
 ## Canonical Configuration
 
@@ -144,10 +146,14 @@ Required state keys:
 - `commission_bps[validator] -> int`
 - `registration_bonds[validator] -> decimal`
 - `self_bond[validator] -> decimal`
-- `total_delegated[validator] -> decimal`
-- `delegations[delegator, validator] -> decimal`
+- `total_delegated[validator] -> decimal` (tokens of the delegation pool)
+- `total_shares[validator] -> decimal` (shares owning those tokens)
+- `delegation_shares[delegator, validator] -> decimal`
+- `delegator_counts[validator] -> int`
 - `delegator_reward_keys[delegator, validator] -> str | None`
-- `delegator_lists[validator] -> list[str]`
+- `reward_per_share[validator] -> decimal` (written by the fee path only)
+- `reward_debt[delegator, validator] -> decimal`
+- `reward_pool[validator] -> decimal` (credited, not yet paid out)
 - `pending_unbond_counter -> int`
 - `pending_unbond_owner_ids[owner] -> list[int]`
 - `pending_unbond_validator_ids[validator] -> list[int]`
@@ -207,8 +213,8 @@ Validators announce leave first, then leave after the configured delay. An
 announcement preserves active membership and the pending leave deadline during
 automatic rebalances; jail, bond eligibility, and stake ranking can still make
 the validator inactive. `leave()` removes the validator from the active set, zeroes active voting power, refunds
-the registration bond, and starts release of self-bond and delegations through
-the unbonding flow.
+the registration bond, and starts the self-bond's unbonding. Delegations stay
+in the validator's pool (see Validator Exit).
 
 The last active validator cannot leave. Governance cannot remove or jail it, and
 a rebalance requested by governance that would select nobody is rejected. Epoch
@@ -218,8 +224,7 @@ An empty set would leave no member able to propose recovery votes.
 ### Removal
 
 Governance can remove a validator. Removal ejects the validator from the active
-set and starts the same bonded-funds exit path, unless a later slashing design
-changes that behavior.
+set and takes the same exit path.
 
 ### Jailing
 
@@ -259,7 +264,14 @@ Current semantics:
 
 - `slash_bps` is an integer basis-point rate in `(0, 10000]`
 - slashable stake always includes live stake:
-  `self_bond + total_delegated`
+  `self_bond + total_delegated`; the delegation pool is one participant, so a
+  slash lowers `total_delegated` (every share's value at once) and never
+  touches individual delegations, shares, or earned rewards
+- rewards a delegator earned before the slash stay claimable; slashed stake
+  stops earning at once (the next fee split uses the lower stake)
+- a 100% slash leaves a pool with shares but no tokens: it earns nothing,
+  refuses new delegations, and its holders can still claim rewards and leave
+  with `undelegate(validator, 0)`
 - if `infraction_height` is provided, slashable stake also includes unclaimed
   pending unbonds for the same validator whose `created_block` is greater than
   or equal to that infraction height
@@ -322,85 +334,100 @@ governance recommendations.
 
 ### Candidate Withdrawal
 
-`unregister()` uses the same bonded-funds exit path for pending or approved
-validators. This ensures stake cannot remain attached to a withdrawn validator
-record.
+`unregister()` takes the same exit path for pending or approved validators.
 
-### Forced Exit Sweep
+### Validator Exit
 
-The contract must treat validator exits as a full bonding-state unwind:
-
-- operator self-bond becomes a pending unbond owned by the validator operator
-- every live delegation becomes a pending unbond owned by the delegator
-- `self_bond`, `total_delegated`, and `delegations[* , validator]` are zeroed
-- `delegator_lists[validator]` is cleared
-- the validator stops accepting new delegation immediately
-
-Pending unbonds created by these exit paths should carry a reason field so
-clients can distinguish normal undelegation from forced validator exit. The
-current contract uses:
-
-- `reason = "left"`
-- `reason = "removed"`
-- `reason = "withdrawn"`
+An exit (leave, governance removal, withdrawal) refunds the registration bond
+and moves the operator's self bond into a pending unbond (with `reason`
+`left`, `removed` or `withdrawn`). It does not touch delegations: they stay in
+the validator's pool, which earns nothing once the validator is inactive, and
+each delegator undelegates when it chooses. The exit's cost does not grow with
+delegators, so a validator with any number of delegators can leave or be
+removed. Undelegating from an exited validator unlocks at `left_at` plus the
+unbonding period (at once if that has passed), as the old forced sweep did,
+and the pending unbond stays slashable for infractions at or before its
+creation. A validator that registers again keeps the delegations it still
+has.
 
 ## Delegator Lifecycle
 
 ### Delegate
 
 `delegate(validator, amount, reward_key=None)` transfers `currency` into the
-membership contract and increases `delegations[delegator, validator]`.
-
-If this is the first delegation for the `(delegator, validator)` pair, the
-delegator is added to `delegator_lists[validator]`.
+contract and buys pool shares: `amount` while the pool is empty, else
+`amount * total_shares / total_delegated` (rounded down). It first pays out
+the delegator's pending reward from that validator. A pool whose tokens were
+fully slashed refuses new delegations.
 
 ### Undelegate
 
-`undelegate(validator, amount)` decreases the live delegation and creates a
-pending unbond record with an unlock time.
+`undelegate(validator, amount)` pays out the pending reward, burns the shares
+worth `amount` (all of them when `amount` is the delegation's full value) and
+creates a pending unbond for the released tokens. `get_delegation` returns the
+current value as `amount`.
+
+### Claim Rewards
+
+`claim_rewards(validator)` pays the delegator's pending reward from that
+validator to its reward key (`DelegatorRewardClaimed` event). Every
+delegation change claims first, so a reward key change never redirects
+rewards already earned. `get_pending_rewards(delegator, validator)` (and
+`get_delegation(...)["pending_rewards"]`) report what a claim would pay.
 
 ### Claim Unbond
 
 `claim_unbond(unbond_id)` releases funds after the unbonding period.
+`get_pending_unbond_ids(owner)` lists an owner's unbonds.
 
-Because forced validator exits can create pending unbonds for third parties,
-the contract must expose an owner-indexed lookup so delegators can discover the
-new unbond ids without relying on an event stream.
+Indexers list a validator's delegators from the `Delegated` and `Undelegated`
+events (delegator, validator, amount, shares); the contract keeps only
+`delegator_counts`.
 
 ## Reward Distribution
 
-ABCI remains responsible for applying balance deltas, but the split is derived
-from `validators` state.
+The block executor (vm-core `tx_rewards`) computes every paid transaction's
+rewards. Its work and writes grow with the active validators, never with
+delegators.
 
-For each validator reward allotment `R`:
+For each active validator's allotment `R` (its share of the validator total
+by power, in chi):
 
-1. Read operator commission rate `commission_bps`.
-2. Compute `commission = R * commission_bps / 10000`.
-3. Compute `remainder = R - commission`.
-4. Compute `stake_base = self_bond + total_delegated`.
-5. If `stake_base <= 0`, send all of `R` to the operator reward key.
-6. Otherwise:
-   - operator stake share = `remainder * self_bond / stake_base`
-   - delegator share for delegator `d` =
-     `remainder * delegation[d, validator] / stake_base`
-   - operator total = `commission + operator stake share`
+1. `bps = effective_commission_bps(validator)`: `commission_bps` clamped to
+   `[0, max_commission_bps]` (the policy maximum, itself within `[0, 10000]`).
+   The contract's views and the fee path apply this one rule.
+2. `commission = R * bps / 10000`, `remainder = R - commission`.
+3. `stake_base = self_bond + total_delegated`.
+4. If the pool has tokens and shares:
+   `pool = remainder * total_delegated / stake_base`, else `pool = 0`.
+5. The operator gets `R - pool` (its commission, its self bond's part, and the
+   rounding), paid to `reward_keys[validator]`.
+6. The pool's tokens (`pool / chi rate`) are credited to the `validators`
+   balance and `reward_pool[validator]`, and `reward_per_share[validator]`
+   grows by `tokens / total_shares`. A credit too small for any share goes to
+   the operator.
 
-Payout targets:
+Each validator's stake (`self_bond`, `total_delegated`, `total_shares`) is
+read as the transaction leaves it (a delegation in the same transaction is
+already in the pool, a slash already applied); everything else (split, chi
+rate, foundation, developers, active set, powers, commission) as the
+transaction found it.
 
-- operator -> `reward_keys[validator]`
-- delegator -> `delegator_reward_keys[delegator, validator]` if set, otherwise
-  the delegator account itself
+A delegator's pending reward is
+`shares * reward_per_share - reward_debt`, at least 0; after each change the
+debt is reset to `shares * reward_per_share` plus one 10^-30 unit. All
+products and quotients are `ContractingDecimal` (30 places) rounded down, so
+no holder is ever paid more than its exact share and `reward_pool` never goes
+negative.
 
-Rounding:
+Conservation, exactly: the fee splits into operators, pools, foundation,
+developers and the burned rest; per validator, everything credited to the
+pool equals what was paid out plus `reward_pool`; `reward_pool` is the sum of
+the pending rewards plus the rounding dust, which stays in the pool.
 
-- Use the existing reward precision rules in ABCI.
-- Allocate rounding remainder to the final recipient in iteration order to
-  preserve exact conservation of value.
-
-This model gives the validator operator two reward components:
-
-- commission for operating the validator
-- pro-rata stake yield on the operator self-bond
+Receipts carry one `validator_reward` record per active validator and one
+`delegator_pool_reward` record (recipient `validators`, with `validator_key`)
+per credited pool; there are no per-delegator records.
 
 ## Validator Selection
 
@@ -443,22 +470,52 @@ The recommended rollout mode is `equal`.
 
 ## Mainnet Prepared Profile
 
-`contracts/contracts_mainnet.json` currently pins the prepared mainnet policy:
+`contracts/contracts_mainnet.json` pins the launch policy:
 
-- `selection_mode = "auto_top_n"`
+- `selection_mode = "manual"`: the active set changes only through
+  governance votes
 - `max_validators = 13`
 - `power_mode = "equal"`
 - `rebalance_interval = 720`
 - `activation_delay_epochs = 1`
 - `unbonding_period_days = 14`
+- `min_self_bond = 100000` and `min_total_bond = 500000` (XIAN)
+- `max_commission_bps = 2000`
 - `max_active_set_churn = 1`
 - `min_bond_margin_bps = 500`
 
-The launch bundle starts from one bootstrap validator. `min_self_bond` and
-`min_total_bond` are initially `0` so the bootstrap validator is not removed
-before validator bonding exists on-chain. Validators are still ranked by
-`self_bond + total_delegated`, so bonded validators displace weaker incumbents
-as the active set fills.
+The minimum stake applies in every mode: an `add_member` proposal (manual or
+hybrid) is refused, and an open one rejected at finalization, when the
+candidate's self bond or total bond is below the minimum; automatic selection
+skips such accounts. The genesis validator starts without a bond; the
+minimum applies to it only once selection becomes automatic.
+
+The churn limit counts every newcomer a rebalance admits, whether it fills an
+empty seat or replaces an incumbent, so no rebalance can hand most of the set
+to fresh accounts. `max_active_set_churn = 0` admits no one automatically.
+
+### Switching Selection Mode
+
+Moving from `manual` to `hybrid` or `auto_top_n` is one governance action:
+
+1. Every validator that should stay bonds at least `min_self_bond` and
+   reaches `min_total_bond`; candidates register and bond.
+2. A validator proposes `update_policy` with the new `selection_mode` (and any
+   other policy fields), and the members vote it through.
+3. Finalizing the vote applies the policy and rebalances at once: incumbents
+   below the minimum leave the set, at most `max_active_set_churn` newcomers
+   enter, and from then on ABCI rebalances every `rebalance_interval` blocks.
+
+Switch only once the active set is full of bonded validators (add them in
+`manual` mode first). Automatic selection admits newcomers into empty seats
+one per rebalance with no stake comparison: from a one-validator set, twelve
+fresh accounts holding the minimum stake (7.2M XIAN with the registration
+fees) hold 12 of 13 seats after 12 epochs. Into a full set they must outbond
+an incumbent by `min_bond_margin_bps`, one per rebalance.
+
+If that rebalance would leave no active validator the vote cannot finalize,
+so a switch can never empty the set. Switching back to `manual` is the same
+vote; the active set then stays as it is.
 
 ## ABCI Integration
 
@@ -471,17 +528,11 @@ ABCI integration requirements:
 ABCI reward handling should evolve as follows:
 
 - keep reading the active validator list from `validators.active_validators`
-- for each validator reward allotment, read:
-  - `commission_bps`
-  - `self_bond`
-  - `total_delegated`
-  - `delegator_lists`
-  - `delegations`
-  - `delegator_reward_keys`
-- compute the operator/delegator split off-chain
-- emit reward records for both operator and delegators
-
-This lets reward splitting ship before automatic validator-set selection.
+- for each validator reward allotment, the block executor reads
+  `commission_bps`, `config:max_commission_bps`, `self_bond`,
+  `total_delegated` and `total_shares`, and writes the operator's balance,
+  `reward_per_share`, `reward_pool` and the `validators` balance
+- no delegator state is read or written by the fee path
 
 ## Governance Surface
 
@@ -556,10 +607,13 @@ Governance vote types should eventually include:
 - `total_slashed[v] >= 0`.
 - processed evidence must not be applied twice.
 - every value stored in `types` includes all immutable recovery vote types.
-- If `delegations[d, v] == 0`, `d` should eventually be removed from
-  `delegator_lists[v]`.
-- If `status in {left, removed, withdrawn}`, then `self_bond[v] == 0` and
-  `total_delegated[v] == 0`.
+- `total_shares[v]` is the sum of `delegation_shares[*, v]`, and a pool
+  without shares has no tokens (a fully slashed pool can have shares and no
+  tokens).
+- `currency.balances:validators` equals the registration bonds, self bonds,
+  pool tokens, unclaimed pending unbonds and `reward_pool`s.
+- `reward_pool[v]` is at least the sum of its delegators' pending rewards.
+- If `status in {left, removed, withdrawn}`, then `self_bond[v] == 0`.
 - Reward distribution must conserve value exactly.
 - The canonical fee split is 70% validators, 0% burn, 0% foundation, and 30%
   contract developers.
