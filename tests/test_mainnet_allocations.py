@@ -5,11 +5,15 @@ Every entry must reach genesis exactly as written, or the sync must refuse it.
 
 import importlib.util
 import json
+import os
+from decimal import Decimal, localcontext
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).absolute().parents[1]
+ROOT = Path(
+    os.environ.get("XIAN_CONFIGS_SOURCE_ROOT", Path(__file__).absolute().parents[1])
+)
 SPEC = importlib.util.spec_from_file_location(
     "sync_mainnet_allocations", ROOT / "scripts" / "sync-mainnet-allocations.py"
 )
@@ -126,3 +130,16 @@ def test_the_bundle_receives_the_allocation_text_unchanged():
         sync.currency_contract(expected)["constructor_args"]["initial_balances"]
         == balances
     )
+
+
+def test_allocation_total_is_exact_independent_of_decimal_context():
+    balances = {
+        KEY: "123456789012345678901234567890.123456789012345678901234567890",
+        "dao": "0.000000000000000000000000000001",
+    }
+    expected = Decimal("123456789012345678901234567890.123456789012345678901234567891")
+
+    with localcontext() as context:
+        context.prec = 6
+        assert sync.allocation_total(balances) == expected
+        assert sync.allocation_total(dict(reversed(list(balances.items())))) == expected

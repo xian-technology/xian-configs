@@ -6,11 +6,10 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from xian_runtime_types.decimal import ContractingDecimal, canonical_fixed
-from xian_runtime_types.numeric_wire import decode_wire_numbers
-
 from generate_token_factory_artifacts import verify_token_factory_artifacts
 from mainnet_allocations import load_allocation_balances
+from xian_runtime_types.decimal import ContractingDecimal, canonical_fixed
+from xian_runtime_types.numeric_wire import decode_wire_numbers
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_BUNDLE_NAMES = ("local", "devnet", "testnet", "mainnet")
@@ -267,6 +266,19 @@ def validate_mainnet_currency_allocations(
         )
 
 
+def validate_validator_coordinator(contracts: list[dict], *, bundle_path: Path) -> None:
+    names = [contract.get("name") for contract in contracts]
+    if (
+        names.count("validator_penalties") != 1
+        or "validators" not in names
+        or names.index("validator_penalties") > names.index("validators")
+    ):
+        raise SystemExit(
+            "validator penalty coordinator must appear exactly once before "
+            f"validators in {bundle_path}"
+        )
+
+
 def validate_contract_bundles() -> None:
     contracts_dir = REPO_ROOT / "contracts"
     bundle_paths = sorted(contracts_dir.glob("contracts_*.json"))
@@ -284,6 +296,7 @@ def validate_contract_bundles() -> None:
         contracts = payload.get("contracts")
         if not isinstance(contracts, list) or not contracts:
             raise SystemExit(f"contract bundle has no contracts array: {bundle_path}")
+        validate_validator_coordinator(contracts, bundle_path=bundle_path)
 
         validators_contract = next(
             (
@@ -667,17 +680,23 @@ def validate_mainnet_genesis_pin(manifest_path: Path, manifest: dict) -> None:
     """A draft mainnet must list the pin as a finalization item; a final one must pin it."""
     genesis_build = manifest["genesis_build"] or {}
     if genesis_build.get("status") == "draft-rehearsal":
-        if not any("genesis_sha256" in item for item in genesis_build["finalization_required"]):
+        if not any(
+            "genesis_sha256" in item for item in genesis_build["finalization_required"]
+        ):
             raise SystemExit(
                 "draft mainnet must list pinning genesis_sha256 as a finalization item "
                 f"in {manifest_path}"
             )
         return
     if manifest["genesis_sha256"] is None:
-        raise SystemExit(f"canonical mainnet must pin genesis_sha256 in {manifest_path}")
+        raise SystemExit(
+            f"canonical mainnet must pin genesis_sha256 in {manifest_path}"
+        )
 
 
-def _validate_bundle_genesis(manifest_path: Path, manifest: dict, *, network: str) -> None:
+def _validate_bundle_genesis(
+    manifest_path: Path, manifest: dict, *, network: str
+) -> None:
     genesis = manifest["genesis"]
     if genesis["kind"] != "bundle" or genesis["bundle"] != network:
         raise SystemExit(
@@ -685,15 +704,22 @@ def _validate_bundle_genesis(manifest_path: Path, manifest: dict, *, network: st
             f"in {manifest_path}"
         )
     if genesis["genesis_time"] is None:
-        raise SystemExit(f"canonical {network} must pin genesis_time in {manifest_path}")
+        raise SystemExit(
+            f"canonical {network} must pin genesis_time in {manifest_path}"
+        )
 
 
-def _validate_registry_release(manifest_path: Path, manifest: dict, *, network: str) -> None:
+def _validate_registry_release(
+    manifest_path: Path, manifest: dict, *, network: str
+) -> None:
     if manifest["node_image_mode"] != "registry":
         raise SystemExit(
             f"canonical {network} must pin published registry images in {manifest_path}"
         )
-    if manifest["node_integrated_image"] is None or manifest["node_split_image"] is None:
+    if (
+        manifest["node_integrated_image"] is None
+        or manifest["node_split_image"] is None
+    ):
         raise SystemExit(
             f"canonical {network} registry image mode requires both node "
             f"images in {manifest_path}"

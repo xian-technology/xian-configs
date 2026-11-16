@@ -35,10 +35,14 @@
       "owner": "validators",
       "constructor_args": {
         "initial_split": [
-          {"__fixed__": "0.7"},
+          {
+            "__fixed__": "0.7"
+          },
           0,
           0,
-          {"__fixed__": "0.3"}
+          {
+            "__fixed__": "0.3"
+          }
         ]
       }
     },
@@ -52,6 +56,11 @@
     {
       "name": "dao",
       "owner": "validators",
+      "constructor_args": null
+    },
+    {
+      "name": "validator_penalties",
+      "owner": null,
       "constructor_args": null
     },
     {

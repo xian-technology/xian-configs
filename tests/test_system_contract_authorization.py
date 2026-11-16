@@ -1,10 +1,9 @@
-from decimal import Decimal, ROUND_DOWN, localcontext
+from decimal import ROUND_DOWN, Decimal, localcontext
 from pathlib import Path
 
 import pytest
 from contracting.local import ContractingClient
 from xian_runtime_types.time import Datetime
-
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS_DIR = ROOT / "contracts"
@@ -32,6 +31,14 @@ def submit_contract(
     file_name: str,
     constructor_args=None,
 ):
+    if (
+        name == "validators"
+        and client.raw_driver.get("validator_penalties.__code__") is None
+    ):
+        client.submit(
+            (CONTRACTS_DIR / "validator_penalties.s.py").read_text(),
+            name="validator_penalties",
+        )
     source = (CONTRACTS_DIR / file_name).read_text(encoding="utf-8")
     client.submit(
         source,
@@ -133,7 +140,9 @@ MAX_CHI_RATE = 10**61 - 1
 
 def test_chi_cost_refuses_a_rate_the_node_cannot_price_with(client):
     # Genesis refuses such an initial rate itself (xian-abci genesis builder).
-    chi_cost = submit_contract(client, "chi_cost", "chi_cost.s.py", {"initial_rate": 20})
+    chi_cost = submit_contract(
+        client, "chi_cost", "chi_cost.s.py", {"initial_rate": 20}
+    )
 
     with pytest.raises(AssertionError, match="Chi cost exceeds"):
         chi_cost.set_value(new_value=MAX_CHI_RATE + 1, signer="validators")
@@ -197,7 +206,9 @@ def _deploy_validators(client, constructor_args=None):
 
 
 @pytest.mark.parametrize("rate", [Decimal("7.5"), Decimal("7")])
-def test_chi_cost_proposal_rejects_values_the_chi_cost_contract_cannot_store(client, rate):
+def test_chi_cost_proposal_rejects_values_the_chi_cost_contract_cannot_store(
+    client, rate
+):
     _, validators = _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2]})
 
     with pytest.raises(AssertionError, match="Chi cost must be an integer"):
@@ -216,7 +227,9 @@ def test_chi_cost_proposal_rejects_a_rate_the_node_cannot_price_with(client):
         )
 
     assert validators.total_votes.get() == 0
-    validators.propose_vote(type_of_vote="chi_cost_change", arg=MAX_CHI_RATE, signer=NODE1)
+    validators.propose_vote(
+        type_of_vote="chi_cost_change", arg=MAX_CHI_RATE, signer=NODE1
+    )
     assert validators.total_votes.get() == 1
 
 
@@ -249,7 +262,9 @@ def test_validator_registration_requires_the_signing_account(client):
     currency.transfer(amount=1000, to=CANDIDATE, signer="founder")
     currency.approve(amount=1000, to="validators", signer=CANDIDATE)
     validators.register(signer=CANDIDATE)
-    assert client.raw_driver.get(f"validators.pending_registrations:{CANDIDATE}") is True
+    assert (
+        client.raw_driver.get(f"validators.pending_registrations:{CANDIDATE}") is True
+    )
 
 
 def test_automatic_selection_keeps_announced_validator_until_leave(client):
@@ -337,7 +352,9 @@ def test_vault_seed_requires_distinct_nonempty_owners(client, owners):
     ],
     ids=["tiny", "uneven", "full-slash", "rounded-zero", "normal", "mixed"],
 )
-def test_slashing_keeps_nonnegative_balances_and_conserves_value(client, stake_amounts, slash_bps):
+def test_slashing_keeps_nonnegative_balances_and_conserves_value(
+    client, stake_amounts, slash_bps
+):
     currency, validators = _deploy_validators(client)
     amounts = [Decimal(amount) for amount in stake_amounts]
     for account, amount in zip([NODE1, "alice", "bob", "carol"], amounts):
@@ -370,7 +387,10 @@ def test_slashing_keeps_nonnegative_balances_and_conserves_value(client, stake_a
         assert proposal["result"]["slash_amount"] == expected_slash
         # The stake is conserved per pool; a holder's value is its share of
         # the pool, rounded down (at most one unit per holder stays pooled).
-        assert record["self_bond"] + record["total_delegated"] == sum(amounts) - expected_slash
+        assert (
+            record["self_bond"] + record["total_delegated"]
+            == sum(amounts) - expected_slash
+        )
         assert 0 <= record["total_delegated"] - sum(values) < Decimal("3e-30")
     assert currency.balance_of(address="validators") == record["total_bond"]
 
@@ -439,7 +459,9 @@ def test_state_patch_can_be_approved_through_activation_height(client, vote_heig
     )
     assert proposal["status"] == "approved"
     assert governance.get_patch(patch_id="on-time-patch")["status"] == "approved"
-    assert client.raw_driver.get("governance.scheduled_patches:12:on-time-patch") is True
+    assert (
+        client.raw_driver.get("governance.scheduled_patches:12:on-time-patch") is True
+    )
 
 
 def test_vault_counts_only_current_owners_toward_transaction_quorum(client):
@@ -519,8 +541,12 @@ def test_vault_owner_changes_keep_count_and_quorum_consistent(client):
         vault.submit_transaction(to="bob", amount=1, signer="carol")
 
 
-@pytest.mark.parametrize("requirement,allowed", [(0, False), (1, True), (2, True), (3, False)])
-def test_vault_quorum_changes_require_positive_attainable_value(client, requirement, allowed):
+@pytest.mark.parametrize(
+    "requirement,allowed", [(0, False), (1, True), (2, True), (3, False)]
+)
+def test_vault_quorum_changes_require_positive_attainable_value(
+    client, requirement, allowed
+):
     submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
     vault = submit_contract(
         client,
@@ -528,7 +554,9 @@ def test_vault_quorum_changes_require_positive_attainable_value(client, requirem
         "vault.s.py",
         {"initial_owners": "alice,bob", "initial_required_signatures": 2},
     )
-    vault.submit_transaction(amount=requirement, tx_type="changeRequirement", signer="alice")
+    vault.submit_transaction(
+        amount=requirement, tx_type="changeRequirement", signer="alice"
+    )
     vault.approve_transaction(tx_id=1, signer="bob")
     if allowed:
         vault.execute_transaction(tx_id=1, signer="alice")
@@ -565,10 +593,12 @@ def _validator_power(client, account):
     return client.raw_driver.get(f"validators.powers:{account}")
 
 
-@pytest.mark.parametrize("account", [CANDIDATE.upper(), "D4" + "d4" * 31, "alice", "d4" * 31])
+@pytest.mark.parametrize(
+    "account", [CANDIDATE.upper(), "D4" + "d4" * 31, "alice", "d4" * 31]
+)
 def test_registration_requires_a_canonical_lowercase_key(client, account):
     _deploy_validators(client)
-    _fund_candidate(client, account)
+    _fund_candidate(client, account.lower())
     validators = client.get_contract_proxy("validators")
 
     with pytest.raises(AssertionError, match="canonical"):
@@ -582,7 +612,7 @@ def test_case_variant_cannot_take_a_second_validator_seat(client):
         client,
         {"genesis_nodes": [NODE1, NODE2], "selection_mode": "auto_top_n"},
     )
-    _fund_candidate(client, NODE1.upper())
+    _fund_candidate(client, NODE1)
 
     with pytest.raises(AssertionError, match="canonical"):
         validators.register(signer=NODE1.upper(), environment={"block_num": 1})
@@ -601,7 +631,9 @@ def test_add_member_activates_with_the_power_fixed_at_proposal(client):
     _, validators = _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2, NODE3]})
     _fund_candidate(client)
     validators.register(requested_validator_power=10, signer=CANDIDATE)
-    proposal = validators.propose_vote(type_of_vote="add_member", arg=CANDIDATE, signer=NODE1)
+    proposal = validators.propose_vote(
+        type_of_vote="add_member", arg=CANDIDATE, signer=NODE1
+    )
     assert proposal["member_power"] == 10
     validators.vote(proposal_id=1, vote="yes", signer=NODE2)
 
@@ -627,7 +659,9 @@ def test_requested_validator_power_is_capped(client, power, allowed):
     _fund_candidate(client)
     if allowed:
         validators.register(requested_validator_power=power, signer=CANDIDATE)
-        validators.update_registration(requested_validator_power=power, signer=CANDIDATE)
+        validators.update_registration(
+            requested_validator_power=power, signer=CANDIDATE
+        )
         assert validators.get_validator(account=CANDIDATE)["requested_power"] == power
         return
 
@@ -635,7 +669,9 @@ def test_requested_validator_power_is_capped(client, power, allowed):
         validators.register(requested_validator_power=power, signer=CANDIDATE)
     validators.register(signer=CANDIDATE)
     with pytest.raises(AssertionError, match="Validator power"):
-        validators.update_registration(requested_validator_power=power, signer=CANDIDATE)
+        validators.update_registration(
+            requested_validator_power=power, signer=CANDIDATE
+        )
     assert validators.get_validator(account=CANDIDATE)["requested_power"] == 10
 
 
@@ -721,7 +757,9 @@ def test_last_active_validator_cannot_leave(client):
     "type_of_vote,arg",
     [("remove_member", NODE1), ("jail_member", {"member": NODE1})],
 )
-def test_governance_cannot_remove_or_jail_the_last_active_validator(client, type_of_vote, arg):
+def test_governance_cannot_remove_or_jail_the_last_active_validator(
+    client, type_of_vote, arg
+):
     _, validators = _deploy_validators(client)
 
     with pytest.raises(AssertionError, match="last active validator"):
@@ -770,7 +808,11 @@ def test_policy_update_cannot_select_an_empty_validator_set(client):
 def test_epoch_rebalance_retains_the_set_when_nobody_is_eligible(client):
     _, validators = _deploy_validators(
         client,
-        {"genesis_nodes": [NODE1, NODE2], "selection_mode": "auto_top_n", "min_self_bond": 1},
+        {
+            "genesis_nodes": [NODE1, NODE2],
+            "selection_mode": "auto_top_n",
+            "min_self_bond": 1,
+        },
     )
 
     result = validators.rebalance(signer=NODE1, environment={"block_num": 1})
@@ -796,7 +838,9 @@ def test_add_member_proposal_is_rejected_when_candidate_was_jailed(client):
     _fund_candidate(client)
     validators.register(signer=CANDIDATE)
     validators.propose_vote(type_of_vote="add_member", arg=CANDIDATE, signer=NODE1)
-    validators.propose_vote(type_of_vote="jail_member", arg={"member": CANDIDATE}, signer=NODE1)
+    validators.propose_vote(
+        type_of_vote="jail_member", arg={"member": CANDIDATE}, signer=NODE1
+    )
     validators.vote(proposal_id=2, vote="yes", signer=NODE2)
 
     result = validators.vote(proposal_id=1, vote="yes", signer=NODE2)
@@ -807,7 +851,9 @@ def test_add_member_proposal_is_rejected_when_candidate_was_jailed(client):
 
 
 def test_remove_member_proposal_is_rejected_when_member_was_already_removed(client):
-    currency, validators = _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2, NODE3]})
+    currency, validators = _deploy_validators(
+        client, {"genesis_nodes": [NODE1, NODE2, NODE3]}
+    )
     validators.propose_vote(type_of_vote="remove_member", arg=NODE3, signer=NODE1)
     validators.propose_vote(type_of_vote="remove_member", arg=NODE3, signer=NODE1)
     for voter in [NODE2, NODE3]:
@@ -825,7 +871,9 @@ def test_remove_member_proposal_is_rejected_when_member_was_already_removed(clie
 
 def test_jail_member_proposal_is_rejected_when_member_is_already_jailed(client):
     _, validators = _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2, NODE3]})
-    validators.propose_vote(type_of_vote="jail_member", arg={"member": NODE3}, signer=NODE1)
+    validators.propose_vote(
+        type_of_vote="jail_member", arg={"member": NODE3}, signer=NODE1
+    )
     validators.apply_evidence_penalty(
         member=NODE3,
         infraction_type="DUPLICATE_VOTE",
@@ -889,7 +937,11 @@ def test_evidence_rebalance_retains_the_set_when_nobody_remains_eligible(client)
 def test_second_hybrid_add_member_proposal_is_rejected_after_approval(client):
     _, validators = _deploy_validators(
         client,
-        {"genesis_nodes": [NODE1, NODE2], "selection_mode": "hybrid", "max_validators": 2},
+        {
+            "genesis_nodes": [NODE1, NODE2],
+            "selection_mode": "hybrid",
+            "max_validators": 2,
+        },
     )
     _fund_candidate(client)
     validators.register(signer=CANDIDATE)
@@ -957,7 +1009,12 @@ def _bond(client, validators, account, amount):
 
 def test_epoch_rebalance_reports_a_changed_set_as_not_retained(client):
     _, validators = _deploy_validators(
-        client, {"selection_mode": "auto_top_n", "min_self_bond": 1, "max_new_power_bps": 10000}
+        client,
+        {
+            "selection_mode": "auto_top_n",
+            "min_self_bond": 1,
+            "max_new_power_bps": 10000,
+        },
     )
     _bond(client, validators, NODE1, 10)
     _fund_candidate(client)
@@ -1017,7 +1074,11 @@ def test_add_member_is_rejected_after_the_candidate_unregisters(client):
 def test_jailing_evidence_rebalances_even_after_this_epochs_rebalance(client):
     _, validators = _deploy_validators(
         client,
-        {"genesis_nodes": [NODE1, NODE2], "selection_mode": "auto_top_n", "min_self_bond": 1},
+        {
+            "genesis_nodes": [NODE1, NODE2],
+            "selection_mode": "auto_top_n",
+            "min_self_bond": 1,
+        },
     )
     _bond(client, validators, NODE1, 10)
     _bond(client, validators, NODE2, 10)

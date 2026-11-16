@@ -30,7 +30,28 @@ def canonical_genesis_amount(value: Any):
 
 
 def require_genesis_account(account: str):
-    assert isinstance(account, str) and account != "", "Genesis account must be non-empty."
+    assert isinstance(account, str) and account != "", (
+        "Genesis account must be non-empty."
+    )
+    return validate_account(account)
+
+
+def require_canonical_hex_account(account: str):
+    if len(account) != 64 or account == account.lower():
+        return
+    for character in account:
+        if character not in "0123456789abcdefABCDEF":
+            return
+    assert False, "Hex account must be a canonical lowercase 64-hex key."
+
+
+@export
+def validate_account(account: str):
+    assert account != "", "Account must be non-empty."
+    assert len(account.encode("utf-8")) <= 511 - len("currency.balances:"), (
+        "Account exceeds the storage key limit."
+    )
+    require_canonical_hex_account(account)
     return account
 
 
@@ -74,9 +95,7 @@ def seed_token_metadata(token_metadata: dict = None):
     for key in token_metadata:
         assert key != "total_supply", "total_supply is managed by the contract."
         assert key != "operator", "operator is managed by governance."
-        assert (
-            key != "permit_authorizer"
-        ), "permit_authorizer is managed by governance."
+        assert key != "permit_authorizer", "permit_authorizer is managed by governance."
         metadata[key] = token_metadata[key]
 
 
@@ -100,16 +119,14 @@ def change_metadata(key: str, value: Any):
     assert ctx.caller == metadata["operator"], "Only operator can set metadata."
     assert key != "total_supply", "total_supply is managed by the contract."
     assert key != "operator", "operator is managed by governance."
-    assert (
-        key != "permit_authorizer"
-    ), "permit_authorizer is managed by governance."
+    assert key != "permit_authorizer", "permit_authorizer is managed by governance."
     metadata[key] = value
 
 
 def require_governance():
-    assert (
-        ctx.caller == GOVERNANCE_CONTRACT
-    ), "Only governance can change sensitive currency settings."
+    assert ctx.caller == GOVERNANCE_CONTRACT, (
+        "Only governance can change sensitive currency settings."
+    )
 
 
 def require_name(name: str, label: str):
@@ -142,6 +159,7 @@ def set_permit_authorizer(new_authorizer: str):
 @export
 def transfer(amount: decimal, to: str):
     assert amount > 0, "Cannot send negative balances."
+    validate_account(to)
     assert balances[ctx.caller] >= amount, "Not enough coins to send."
 
     balances[ctx.caller] -= amount
@@ -162,9 +180,9 @@ def approve(amount: decimal, to: str):
 def approve_from_authorizer(owner: str, spender: str, amount: decimal):
     authorizer = metadata["permit_authorizer"] or "permit_authorizer"
 
-    assert (
-        ctx.caller == authorizer
-    ), "Only permit authorizer can approve on behalf of others."
+    assert ctx.caller == authorizer, (
+        "Only permit authorizer can approve on behalf of others."
+    )
     assert amount >= 0, "Cannot approve negative balances."
 
     approvals[owner, spender] = amount
@@ -175,9 +193,10 @@ def approve_from_authorizer(owner: str, spender: str, amount: decimal):
 @export
 def transfer_from(amount: decimal, to: str, main_account: str):
     assert amount > 0, "Cannot send negative balances."
-    assert (
-        approvals[main_account, ctx.caller] >= amount
-    ), f"Not enough coins approved to send. You have {approvals[main_account, ctx.caller]} approved and are trying to spend {amount}"
+    validate_account(to)
+    assert approvals[main_account, ctx.caller] >= amount, (
+        f"Not enough coins approved to send. You have {approvals[main_account, ctx.caller]} approved and are trying to spend {amount}"
+    )
     assert balances[main_account] >= amount, "Not enough coins to send."
 
     approvals[main_account, ctx.caller] -= amount

@@ -21,6 +21,15 @@ ApproveEvent = LogEvent(
 )
 
 
+def require_canonical_hex_account(account: str):
+    if len(account) != 64 or account == account.lower():
+        return
+    for character in account:
+        if character not in "0123456789abcdefABCDEF":
+            return
+    assert False, "Hex account must be a canonical lowercase 64-hex key."
+
+
 @construct
 def seed(
     token_name: str,
@@ -51,6 +60,8 @@ def seed(
     assert isinstance(operator_address, str) and operator_address != "", (
         "operator_address must be non-empty."
     )
+    require_canonical_hex_account(initial_holder)
+    require_canonical_hex_account(operator_address)
     balances[initial_holder] = initial_supply
     metadata["token_name"] = token_name
     metadata["token_symbol"] = token_symbol
@@ -73,6 +84,7 @@ def change_operator(new_operator: str):
     assert isinstance(new_operator, str) and new_operator != "", (
         "new_operator must be non-empty."
     )
+    require_canonical_hex_account(new_operator)
     operator.set(new_operator)
 
 
@@ -88,6 +100,7 @@ def balance_of(address: str):
 
 @export
 def transfer(amount: decimal, to: str):
+    require_canonical_hex_account(to)
     assert amount > 0, "Cannot send negative balances!"
     assert balances[ctx.caller] >= amount, "Not enough coins to send!"
     balances[ctx.caller] -= amount
@@ -97,6 +110,7 @@ def transfer(amount: decimal, to: str):
 
 @export
 def approve(amount: decimal, to: str):
+    require_canonical_hex_account(to)
     assert amount >= 0, "Cannot approve negative balances!"
     approvals[ctx.caller, to] = amount
     ApproveEvent({"from": ctx.caller, "to": to, "amount": amount})
@@ -104,6 +118,7 @@ def approve(amount: decimal, to: str):
 
 @export
 def transfer_from(amount: decimal, to: str, main_account: str):
+    require_canonical_hex_account(to)
     assert amount > 0, "Cannot send negative balances!"
     assert approvals[main_account, ctx.caller] >= amount, (
         f"Not enough coins approved to send! "

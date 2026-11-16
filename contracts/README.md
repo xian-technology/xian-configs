@@ -10,6 +10,9 @@
   `contracts_testnet.json`, and `contracts_mainnet.json`.
 - The `validators` constructor args in those bundles must pin the full shipped
   validator policy surface explicitly rather than relying on contract defaults.
+- Every bundle deploys `validator_penalties` before `validators`. The coordinator
+  owns bounded penalty progress and unbond summary indexes; `validators` retains
+  all stake and currency-write authority. Standalone harnesses must deploy both.
 - `mainnet_allocations.json` is the source file for mainnet currency genesis
   balances. Run `../scripts/sync-mainnet-allocations.py` after editing it, then
   validate with `../scripts/validate-manifests.py`. Each holder appears once,
@@ -19,6 +22,11 @@
   Anything else is refused, so every balance reaches genesis exactly as
   written; the sync prints the holder count and total supply to check against
   the source ledger.
+
+Native currency transfers reject mixed/uppercase 64-hex account spellings.
+`currency.validate_account` also enforces the 511-byte storage-key boundary;
+validator reward keys and slash destinations use the same validation before
+they can affect payouts.
 
 ## Wallet and Governance Boundaries
 

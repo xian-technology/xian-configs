@@ -107,4 +107,11 @@ def load_allocation_balances(path: Path) -> dict[str, str]:
 
 
 def allocation_total(balances: dict[str, str]) -> Decimal:
-    return sum((Decimal(amount) for amount in balances.values()), Decimal(0))
+    parts = [amount.partition(".") for amount in balances.values()]
+    places = max((len(fraction) for _, _, fraction in parts), default=0)
+    scale = 10**places
+    units = sum(
+        int(whole) * scale + int(fraction.ljust(places, "0") or "0")
+        for whole, _, fraction in parts
+    )
+    return Decimal(f"{units // scale}.{units % scale:0{places}d}")

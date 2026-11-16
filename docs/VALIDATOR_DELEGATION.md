@@ -148,7 +148,10 @@ Required state keys:
 
 - `active_validators -> list[str]`
 - `candidates -> list[str]`
-- `validator_registry -> list[str]`
+- `registry_count -> int`
+- `registry_accounts[index] -> str` (append-only identity history)
+- `known_validators[validator] -> bool`
+- `consensus_keys[sha256(raw_public_key)[:20].hex()] -> str`
 - `statuses[validator] -> str`
 - `powers[validator] -> int`
 - `requested_power[validator] -> int`
@@ -165,8 +168,9 @@ Required state keys:
 - `reward_debt[delegator, validator] -> decimal`
 - `reward_pool[validator] -> decimal` (credited, not yet paid out)
 - `pending_unbond_counter -> int`
-- `pending_unbond_owner_ids[owner] -> list[int]`
-- `pending_unbond_validator_ids[validator] -> list[int]`
+- `pending_unbond_heads[kind, account] -> int | None`
+- `pending_unbond_tails[kind, account] -> int | None`
+- `pending_unbond_links[kind, id, "previous" | "next"] -> int | None`
 - `pending_unbonds[id] -> dict`
 - `jailed[validator] -> bool`
 - `jail_reasons[validator] -> str | None`
@@ -310,8 +314,9 @@ Current semantics:
   `self_bond + total_delegated`; the delegation pool is one participant, so a
   slash lowers `total_delegated` (every share's value at once) and never
   touches individual delegations, shares, or earned rewards
-- rewards a delegator earned before the slash stay claimable; slashed stake
-  stops earning at once (the next fee split uses the lower stake)
+- rewards a delegator earned before the slash stay claimable; live self bond
+  and delegation principal change together, so a block boundary never exposes
+  only one of those two participants as slashed
 - a 100% slash leaves a pool with shares but no tokens: it earns nothing,
   refuses new delegations, and its holders can still claim rewards and leave
   with `undelegate(validator, 0)`
@@ -325,20 +330,38 @@ Current semantics:
   so debits conserve the total and never exceed the participant's stake
 - a total slash that rounds to zero records the penalty without a zero-value
   currency transfer
-- the slashed amount is transferred to `config["slash_destination"]`
+- the slashed amount is transferred to the slash destination accepted when
+  the penalty was requested; policy updates cannot redirect an unfinished job
 
 Because the current `currency` contract has no native burn entrypoint, the
 default slash destination is `dao`. Networks can override this destination
 through policy config if they want slashed value to flow somewhere else.
 
-If automatic selection is enabled, an approved slash forces a same-epoch
-rebalance so stake-based eligibility and ranking update immediately.
+Live-only penalties execute synchronously. Pending-unbond penalties use
+`validator_penalties`, which collects eligible amounts and applies the same
+ordered cumulative arithmetic over multiple blocks. The internal
+`process_pending_slashes` call has one shared maximum of 32 work units across
+all jobs and phases per block. A live-stake work unit applies the self/pool
+pair atomically. Each pending-unbond visit takes one unit. Jobs contain a
+cursor and scalar totals rather than a copy of the pending set.
+
+The configured evidence jail policy takes effect immediately, except for the
+last active validator. While a validator has unfinished jobs, claims against
+its unbonds and changes to its stake, registration, exit or jail status are
+held. Earned reward claims remain available. Progress and already allocated
+slash escrow are committed atomically; a restart resumes the stored cursor.
+The final currency transfer and removal from the live job queue commit
+together, so a replay cannot pay twice. Later jobs compound the results of
+earlier jobs. Automatic selection rebalances after completed work.
 
 Observability:
 
 - `validator_record` exposes `total_slashed` and `last_slashed_at`
-- the approved governance vote stores the computed slash execution result,
-  including the exact `slash_amount`
+- a synchronous governance vote stores the exact `slash_amount`; an asynchronous
+  result identifies its queued job
+- `validator_penalties.get_pending_slash_job(job_id)` reports the phase, cursor,
+  processed principal, allocated escrow, and completed slash amount
+- `validator_record` includes `pending_slash_count`
 
 ### Evidence-Driven Penalties
 
@@ -353,17 +376,17 @@ Current supported evidence types:
 Current runtime flow:
 
 1. `finalize_block` receives `misbehavior` entries from CometBFT.
-2. ABCI resolves the misbehaving validator by matching the CometBFT validator
-   address against the persistent validator registry, not only the current
-   active set.
+2. ABCI resolves the misbehaving validator through the persistent consensus
+   address-to-key mapping, including validators that have left the active set.
 3. ABCI computes a deterministic `evidence_id` and calls
    `validators.apply_evidence_penalty(...)` as an internal system sender.
 4. The contract deduplicates repeated evidence with `processed_evidence`.
-5. The configured slash and jail policy is applied. Evidence slashing uses the
-   delivered `evidence_height`, so only pending unbonds created after that
-   infraction remain slashable.
-6. In automatic modes, the validator set is rebalanced immediately if the
-   penalty changed selection state.
+5. The configured jail policy is applied and the slash is performed or queued.
+   Evidence slashing uses `evidence_height`, so only pending unbonds created at
+   or after that infraction are included.
+6. Once per block, the node advances the shared bounded penalty queue before
+   epoch selection. In automatic modes, changes to selection state and completed
+   penalties trigger a rebalance.
 
 Current policy controls:
 
@@ -421,7 +444,17 @@ rewards already earned. `get_pending_rewards(delegator, validator)` (and
 ### Claim Unbond
 
 `claim_unbond(unbond_id)` releases funds after the unbonding period.
-`get_pending_unbond_ids(owner)` lists an owner's unbonds.
+It removes the record from both live ordered indexes while retaining the
+archival record and the double-claim guard. Counts, amounts and earliest unlock
+are maintained as scalar summaries with an indexed minimum heap, so another
+delegator's queue does not make validator lifecycle calls scan that queue.
+
+`get_pending_unbond_page(owner, cursor=None, limit=100)` returns up to 100 live
+records and a `next_cursor`; a stale or foreign cursor fails without a scan.
+`get_validators_page(cursor=None, limit=25)` pages the append-only identity
+history. `get_validator_count()` is constant work. Legacy full-list contract
+functions remain available; network queries use the bounded page interfaces
+and explicitly reject oversized legacy list responses.
 
 Indexers list a validator's delegators from the `Delegated` and `Undelegated`
 events (delegator, validator, amount, shares); the contract keeps only

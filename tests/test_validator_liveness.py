@@ -23,6 +23,14 @@ def client(tmp_path):
 
 
 def _submit(client, name, args=None):
+    if (
+        name == "validators"
+        and client.raw_driver.get("validator_penalties.__code__") is None
+    ):
+        client.submit(
+            (CONTRACTS_DIR / "validator_penalties.s.py").read_text(),
+            name="validator_penalties",
+        )
     source = (CONTRACTS_DIR / f"{name}.s.py").read_text(encoding="utf-8")
     client.submit(source, name=name, constructor_args=args or {})
     return client.get_contract_proxy(name)
@@ -84,7 +92,9 @@ def test_a_validator_absent_for_the_downtime_window_is_jailed_without_slash(clie
 
 
 def test_a_configured_downtime_slash_is_applied(client):
-    currency, validators = _deploy(client, downtime_jail_blocks=1, downtime_slash_bps=100)
+    currency, validators = _deploy(
+        client, downtime_jail_blocks=1, downtime_slash_bps=100
+    )
     currency.transfer(amount=100, to=NODES[0], signer="founder")
     currency.approve(amount=100, to="validators", signer=NODES[0])
     validators.bond_self(amount=100, signer=NODES[0])
@@ -439,7 +449,9 @@ def test_a_validator_added_by_governance_starts_with_no_missed_blocks(client):
     _register(client, currency, validators, CANDIDATES[0], bond=10)
     client.raw_driver.set(f"validators.missed_blocks:{CANDIDATES[0]}", 7)
 
-    validators.propose_vote(type_of_vote="add_member", arg=CANDIDATES[0], signer=NODES[0])
+    validators.propose_vote(
+        type_of_vote="add_member", arg=CANDIDATES[0], signer=NODES[0]
+    )
 
     assert CANDIDATES[0] in validators.get_members()
     assert validators.get_validator(account=CANDIDATES[0])["missed_blocks"] == 0

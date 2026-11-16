@@ -1,7 +1,7 @@
-import dao
-import rewards
 import chi_cost
 import currency
+import dao
+import rewards
 
 active_validators = Variable()
 candidates = Variable()
@@ -36,9 +36,13 @@ reward_pool = Hash(default_value=0)
 # last commit (FinalizeBlock, through record_liveness).
 missed_blocks = Hash(default_value=0)
 pending_unbond_counter = Variable()
-pending_unbond_owner_ids = Hash(default_value=None)
-pending_unbond_validator_ids = Hash(default_value=None)
+pending_unbond_heads = Hash(default_value=None)
+pending_unbond_tails = Hash(default_value=None)
+pending_unbond_links = Hash(default_value=None)
 pending_unbonds = Hash(default_value=None)
+penalty_counts = ForeignHash(
+    foreign_contract="validator_penalties", foreign_name="pending_counts"
+)
 jailed = Hash(default_value=False)
 jail_reasons = Hash(default_value=None)
 total_slashed = Hash(default_value=0)
@@ -50,7 +54,10 @@ last_evidence_heights = Hash(default_value=None)
 last_evidence_at = Hash(default_value=None)
 last_jailed_at = Hash(default_value=None)
 last_unjailed_at = Hash(default_value=None)
-validator_registry = Variable()
+registry_count = Variable()
+registry_accounts = Hash(default_value=None)
+known_validators = Hash(default_value=False)
+consensus_keys = Hash(default_value=None)
 
 powers = Hash(default_value=0)
 requested_power = Hash(default_value=0)
@@ -86,6 +93,7 @@ MAX_COMMISSION_BPS = 10000
 # Active validators and candidates share a bounded selection pool. Its worst
 # case rebalance and deciding governance vote must fit the chain's chi cap.
 MAX_VALIDATOR_ACCOUNTS = 64
+MAX_UNBOND_PAGE_SIZE = 100
 PASS_THRESHOLD_NUMERATOR = 4
 PASS_THRESHOLD_DENOMINATOR = 5
 PROPOSAL_EXPIRY_DAYS = 7
@@ -269,7 +277,7 @@ def seed(
     candidates.set([])
     pending_unbond_counter.set(0)
     last_rebalance_epoch.set(None)
-    validator_registry.set([])
+    registry_count.set(0)
     types.set(default_vote_types())
     total_votes.set(0)
     registration_fee.set(genesis_registration_fee)
@@ -308,9 +316,7 @@ def seed(
 
         require_selection_capacity(node, active_nodes)
         active_nodes.append(node)
-        current_registry = validator_registry.get()
-        current_registry.append(node)
-        validator_registry.set(current_registry)
+        track_validator(node)
         statuses[node] = STATUS_ACTIVE
         registered_at[node] = now
         joined_at[node] = now
@@ -352,20 +358,13 @@ def resolve_reward_key(account: str, configured_reward_keys: dict = None):
         if configured_reward_key is not None:
             reward_key = configured_reward_key
 
-    if reward_key is None:
-        reward_key = account
-    if reward_key == "":
-        reward_key = account
-
-    return reward_key
+    return normalize_reward_key(account, reward_key)
 
 
 def normalize_reward_key(account: str, reward_key: str = None):
-    if reward_key is None:
-        return account
-    if reward_key == "":
-        return account
-    return reward_key
+    if reward_key is None or reward_key == "":
+        reward_key = account
+    return currency.validate_account(account=reward_key)
 
 
 def normalize_reason(reason: str = None):
@@ -392,9 +391,9 @@ def is_canonical_validator_key(value: Any):
 
 
 def require_canonical_validator_key(value: Any):
-    assert is_canonical_validator_key(
-        value
-    ), "Validator key must be a canonical lowercase 64-hex key."
+    assert is_canonical_validator_key(value), (
+        "Validator key must be a canonical lowercase 64-hex key."
+    )
 
 
 def require_validator_power(power: Any):
@@ -405,10 +404,7 @@ def require_validator_power(power: Any):
 
 
 def is_number(value: Any):
-    return (
-        isinstance(value, (int, decimal))
-        and isinstance(value, bool) == False
-    )
+    return isinstance(value, (int, decimal)) and isinstance(value, bool) == False
 
 
 def validate_non_empty_string(value: Any, label: str):
@@ -444,24 +440,45 @@ def candidate_list():
 
 
 def owner_pending_unbond_ids(owner: str):
-    current_unbond_ids = pending_unbond_owner_ids[owner]
-    if current_unbond_ids is None:
-        return []
-    return current_unbond_ids
+    return pending_unbond_ids("owner", owner)
 
 
-def validator_pending_unbond_ids(validator: str):
-    current_unbond_ids = pending_unbond_validator_ids[validator]
-    if current_unbond_ids is None:
-        return []
-    return current_unbond_ids
+def pending_unbond_ids(kind: str, account: str):
+    result = []
+    current = pending_unbond_heads[kind, account]
+    while current is not None:
+        result.append(current)
+        current = pending_unbond_links[kind, current, "next"]
+    return result
+
+
+def append_pending_unbond(kind: str, account: str, unbond_id: int):
+    previous = pending_unbond_tails[kind, account]
+    pending_unbond_links[kind, unbond_id, "previous"] = previous
+    if previous is None:
+        pending_unbond_heads[kind, account] = unbond_id
+    else:
+        pending_unbond_links[kind, previous, "next"] = unbond_id
+    pending_unbond_tails[kind, account] = unbond_id
+
+
+def remove_pending_unbond(kind: str, account: str, unbond_id: int):
+    previous = pending_unbond_links[kind, unbond_id, "previous"]
+    following = pending_unbond_links[kind, unbond_id, "next"]
+    if previous is None:
+        pending_unbond_heads[kind, account] = following
+    else:
+        pending_unbond_links[kind, previous, "next"] = following
+    if following is None:
+        pending_unbond_tails[kind, account] = previous
+    else:
+        pending_unbond_links[kind, following, "previous"] = previous
+    pending_unbond_links[kind, unbond_id, "previous"] = None
+    pending_unbond_links[kind, unbond_id, "next"] = None
 
 
 def validator_registry_list():
-    current_registry = validator_registry.get()
-    if current_registry is None:
-        return []
-    return current_registry
+    return [registry_accounts[index] for index in range(registry_count.get())]
 
 
 def without_item(items: list, item: str):
@@ -612,6 +629,7 @@ def validate_policy_value(key: str, value: Any):
         return
     if key == "slash_destination":
         validate_non_empty_string(value, key)
+        currency.validate_account(account=value)
         return
     bounds = POLICY_INT_BOUNDS.get(key)
     if bounds is None:
@@ -665,7 +683,9 @@ def can_accept_delegation(account: str):
     if is_jailed(account):
         return False
     status = statuses[account]
-    return status == STATUS_PENDING or status == STATUS_ACTIVE or status == STATUS_APPROVED
+    return (
+        status == STATUS_PENDING or status == STATUS_ACTIVE or status == STATUS_APPROVED
+    )
 
 
 def scaled_units(value: Any):
@@ -718,7 +738,9 @@ def add_pool_shares(delegator: str, validator: str, shares: decimal, amount: dec
     total_delegated[validator] = total_delegated[validator] + amount
 
 
-def remove_pool_shares(delegator: str, validator: str, shares: decimal, amount: decimal):
+def remove_pool_shares(
+    delegator: str, validator: str, shares: decimal, amount: decimal
+):
     remaining_shares = delegation_shares[delegator, validator] - shares
     delegation_shares[delegator, validator] = remaining_shares
     total_shares[validator] = total_shares[validator] - shares
@@ -728,15 +750,15 @@ def remove_pool_shares(delegator: str, validator: str, shares: decimal, amount: 
 
 
 def delegation_reward_key(delegator: str, validator: str):
-    return normalize_reward_key(
-        delegator, delegator_reward_keys[delegator, validator]
-    )
+    return normalize_reward_key(delegator, delegator_reward_keys[delegator, validator])
 
 
 def pending_delegator_reward(delegator: str, validator: str):
     shares = delegation_shares[delegator, validator]
     # The debt's extra unit makes an untouched position's difference -1 unit.
-    return max(shares * reward_per_share[validator] - reward_debt[delegator, validator], 0)
+    return max(
+        shares * reward_per_share[validator] - reward_debt[delegator, validator], 0
+    )
 
 
 def settle_delegator_reward(delegator: str, validator: str):
@@ -780,11 +802,18 @@ def next_unbond_id():
 
 
 def track_validator(account: str):
-    current_registry = validator_registry_list()
-    if account in current_registry:
+    if known_validators[account]:
         return
-    current_registry.append(account)
-    validator_registry.set(current_registry)
+    address = hashlib.sha256_hex(account)[:40]
+    existing = consensus_keys[address]
+    assert existing is None or existing == account, (
+        "Consensus address already registered."
+    )
+    consensus_keys[address] = account
+    known_validators[account] = True
+    index = registry_count.get()
+    registry_accounts[index] = account
+    registry_count.set(index + 1)
 
 
 def create_pending_unbond(
@@ -794,6 +823,7 @@ def create_pending_unbond(
     kind: str,
     reason: str = None,
 ):
+    require_no_pending_slash(validator)
     assert amount > 0, "Unbond amount <= 0"
 
     unbonding_period_days = config["unbonding_period_days"]
@@ -816,12 +846,9 @@ def create_pending_unbond(
         pending_unbond["reason"] = reason
 
     pending_unbonds[unbond_id] = pending_unbond
-    current_unbond_ids = owner_pending_unbond_ids(owner)
-    current_unbond_ids.append(unbond_id)
-    pending_unbond_owner_ids[owner] = current_unbond_ids
-    current_validator_unbond_ids = validator_pending_unbond_ids(validator)
-    current_validator_unbond_ids.append(unbond_id)
-    pending_unbond_validator_ids[validator] = current_validator_unbond_ids
+    append_pending_unbond("owner", owner, unbond_id)
+    append_pending_unbond("validator", validator, unbond_id)
+    importlib.import_module("validator_penalties").track_unbond(unbond_id=unbond_id)
     return pending_unbonds[unbond_id]
 
 
@@ -845,7 +872,7 @@ def is_known_validator(account: str):
 
 
 def has_validator_history(account: str):
-    return account in validator_registry_list()
+    return known_validators[account] == True
 
 
 def sweep_validator_bonding_state(account: str, reason: str):
@@ -876,9 +903,9 @@ def all_validator_accounts():
 
 
 def require_selection_capacity(account: str, known_accounts: list):
-    assert (
-        account in known_accounts or len(known_accounts) < MAX_VALIDATOR_ACCOUNTS
-    ), "Validator selection pool full."
+    assert account in known_accounts or len(known_accounts) < MAX_VALIDATOR_ACCOUNTS, (
+        "Validator selection pool full."
+    )
 
 
 def ready_for_selection(account: str, selection_epoch: int):
@@ -886,15 +913,16 @@ def ready_for_selection(account: str, selection_epoch: int):
 
 
 def meets_min_bonds(account: str):
-    return (
-        self_bond[account] >= policy("min_self_bond")
-        and total_bonded(account) >= policy("min_total_bond")
-    )
+    return self_bond[account] >= policy("min_self_bond") and total_bonded(
+        account
+    ) >= policy("min_total_bond")
 
 
 def require_min_bonds(account: str):
     assert self_bond[account] >= policy("min_self_bond"), "Below the minimum self bond."
-    assert total_bonded(account) >= policy("min_total_bond"), "Below the minimum total bond."
+    assert total_bonded(account) >= policy("min_total_bond"), (
+        "Below the minimum total bond."
+    )
 
 
 def can_be_selected(account: str, selection_mode: str, selection_epoch: int):
@@ -1000,7 +1028,9 @@ def selected_validator_power(account: str):
 
 
 def approve_candidate(account: str, power: int):
-    assert pending_registrations[account] == True, "Member must have pending registration."
+    assert pending_registrations[account] == True, (
+        "Member must have pending registration."
+    )
     assert is_jailed(account) == False, "Jailed."
 
     track_validator(account)
@@ -1008,8 +1038,8 @@ def approve_candidate(account: str, power: int):
     pending_leave[account] = False
     statuses[account] = STATUS_APPROVED
     left_at[account] = None
-    eligible_at_epoch[account] = (
-        current_selection_epoch() + policy("activation_delay_epochs")
+    eligible_at_epoch[account] = current_selection_epoch() + policy(
+        "activation_delay_epochs"
     )
     ensure_candidate(account)
 
@@ -1079,7 +1109,9 @@ def replace_incumbents(
             break
         if challenger in previous_active or challenger in selected_accounts:
             continue
-        weakest_incumbent = weakest_selected_incumbent(selected_accounts, previous_active)
+        weakest_incumbent = weakest_selected_incumbent(
+            selected_accounts, previous_active
+        )
         if weakest_incumbent is None:
             break
         if beats_margin(challenger, weakest_incumbent) == False:
@@ -1129,12 +1161,20 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
                 deactivated.append(weakest_active)
 
     selected_accounts, replacement_budget = fill_empty_seats(
-        selected_accounts, ranked_accounts, previous_active, max_validators, replacement_budget
+        selected_accounts,
+        ranked_accounts,
+        previous_active,
+        max_validators,
+        replacement_budget,
     )
 
     if len(selected_accounts) >= max_validators and replacement_budget > 0:
         selected_accounts = replace_incumbents(
-            selected_accounts, ranked_accounts, previous_active, deactivated, replacement_budget
+            selected_accounts,
+            ranked_accounts,
+            previous_active,
+            deactivated,
+            replacement_budget,
         )
 
     if len(selected_accounts) == 0:
@@ -1200,72 +1240,23 @@ def rebalance_validator_set(force: bool = False, require_selection: bool = True)
 
 
 def validator_record(account: str):
-    active = account in active_nodes_list()
-    unbond_count = 0
-    unbond_total = 0
-    next_unbond_unlock_at = None
-    for unbond_id in validator_pending_unbond_ids(account):
-        pending_unbond = pending_unbonds[unbond_id]
-        if pending_unbond is None or pending_unbond["claimed"] == True:
-            continue
-        unbond_count += 1
-        unbond_total += pending_unbond["amount"]
-        unlock_at = pending_unbond["unlock_at"]
-        if next_unbond_unlock_at is None or unlock_at < next_unbond_unlock_at:
-            next_unbond_unlock_at = unlock_at
-
     previous_rebalance_epoch = last_rebalance_epoch.get()
-    selection_epoch = previous_rebalance_epoch
-    if selection_epoch is None:
-        selection_epoch = 0
-
-    return {
-        "account": account,
-        "status": statuses[account],
-        "active": active,
-        "jailed": is_jailed(account),
-        "jail_reason": normalize_jail_reason(jail_reasons[account]),
-        "last_jailed_at": last_jailed_at[account],
-        "last_unjailed_at": last_unjailed_at[account],
-        "total_slashed": total_slashed[account],
-        "last_slashed_at": last_slashed_at[account],
-        "last_evidence_id": last_evidence_ids[account],
-        "last_evidence_type": last_evidence_types[account],
-        "last_evidence_height": last_evidence_heights[account],
-        "last_evidence_at": last_evidence_at[account],
-        "power": effective_active_power(account),
-        "requested_power": effective_requested_power(account),
-        "reward_key": effective_reward_key(account),
-        "moniker": monikers[account],
-        "network_endpoint": network_endpoints[account],
-        "metadata_uri": metadata_uris[account],
-        "bond": holdings[account],
-        "registration_bond": holdings[account],
-        "self_bond": self_bond[account],
-        "total_delegated": total_delegated[account],
-        "total_bond": total_bonded(account),
-        "commission_bps": effective_commission_bps(account),
-        "total_shares": total_shares[account],
-        "delegator_count": delegator_counts[account],
-        "reward_per_share": reward_per_share[account],
-        "reward_pool": reward_pool[account],
-        "missed_blocks": missed_blocks[account],
-        "pending_unbond_count": unbond_count,
-        "pending_unbond_total": unbond_total,
-        "next_unbond_unlock_at": next_unbond_unlock_at,
-        "pending_registration": pending_registrations[account] == True,
-        "pending_leave_at": pending_leave[account],
-        "last_rebalance_epoch": previous_rebalance_epoch,
-        "eligible_at_epoch": eligible_at_epoch[account],
-        "selection_eligible_at_last_rebalance": can_be_selected(
-            account,
-            policy("selection_mode"),
-            selection_epoch,
-        ),
-        "registered_at": registered_at[account],
-        "joined_at": joined_at[account],
-        "left_at": left_at[account],
-    }
+    selection_epoch = previous_rebalance_epoch or 0
+    active = account in active_nodes_list()
+    return importlib.import_module("validator_penalties").describe_validator(
+        account=account,
+        derived={
+            "active": active,
+            "power": effective_active_power(account),
+            "requested_power": effective_requested_power(account),
+            "reward_key": effective_reward_key(account),
+            "commission_bps": effective_commission_bps(account),
+            "last_rebalance_epoch": previous_rebalance_epoch,
+            "selection_eligible_at_last_rebalance": can_be_selected(
+                account, policy("selection_mode"), selection_epoch
+            ),
+        },
+    )
 
 
 def ceil_div(value: int, divisor: int):
@@ -1280,9 +1271,9 @@ def total_member_weight_internal():
 
 
 def require_total_power_within_limit():
-    assert (
-        total_member_weight_internal() <= MAX_TOTAL_VOTING_POWER
-    ), "Total validator power exceeds the consensus maximum."
+    assert total_member_weight_internal() <= MAX_TOTAL_VOTING_POWER, (
+        "Total validator power exceeds the consensus maximum."
+    )
 
 
 def is_last_active_validator(account: str):
@@ -1291,9 +1282,9 @@ def is_last_active_validator(account: str):
 
 
 def require_not_last_active_validator(account: str):
-    assert (
-        is_last_active_validator(account) == False
-    ), "Cannot remove the last active validator."
+    assert is_last_active_validator(account) == False, (
+        "Cannot remove the last active validator."
+    )
 
 
 def required_yes_weight(total_weight: int):
@@ -1429,6 +1420,7 @@ def deactivate_member(account: str, status: str, refund_bond: bool):
 
 
 def exit_validator(account: str, status: str, refund_bond: bool):
+    require_no_pending_slash(account)
     if account in active_nodes_list():
         deactivate_member(account, status, refund_bond)
     else:
@@ -1472,6 +1464,7 @@ def jail_validator(account: str, reason: str = None):
 
 
 def unjail_validator(account: str):
+    require_no_pending_slash(account)
     assert is_jailed(account) == True, "Not jailed."
 
     jailed[account] = False
@@ -1485,123 +1478,135 @@ def unjail_validator(account: str):
         ensure_candidate(account)
 
 
-def slashable_pending_unbond(unbond: dict, infraction_height: int):
-    if unbond is None:
-        return False
-    if infraction_height is None:
-        return False
-    if unbond["claimed"] == True:
-        return False
-    if unbond["amount"] <= 0:
-        return False
-
-    created_block = unbond.get("created_block")
-    if created_block is None:
-        return False
-    return infraction_height <= created_block
-
-
-def slashable_bond_participants(account: str, infraction_height: int = None):
-    current_self_bond = self_bond[account]
-    total_slashable_bond = current_self_bond
-    slash_participants = []
-
-    if current_self_bond > 0:
-        slash_participants.append(
-            {"kind": "self_bond", "owner": account, "amount": current_self_bond}
-        )
-
-    pool_tokens = total_delegated[account]
-    if pool_tokens > 0:
-        total_slashable_bond += pool_tokens
-        slash_participants.append({"kind": "delegation_pool", "amount": pool_tokens})
-
-    for unbond_id in validator_pending_unbond_ids(account):
-        pending_unbond = pending_unbonds[unbond_id]
-        if slashable_pending_unbond(pending_unbond, infraction_height) == False:
-            continue
-
-        total_slashable_bond += pending_unbond["amount"]
-        slash_participants.append(
-            {
-                "kind": "pending_unbond",
-                "amount": pending_unbond["amount"],
-                "unbond_id": unbond_id,
-            }
-        )
-
-    return slash_participants, total_slashable_bond
-
-
-def slash_validator(
-    account: str,
-    slash_bps: int,
-    reason: str = None,
-    infraction_height: int = None,
-):
-    assert has_validator_history(account), "Unknown validator."
-    assert slash_bps > 0, "Slash bps <= 0"
-    assert slash_bps <= 10000, "Slash bps > 10000"
-
-    slash_participants, total_slashable_bond = slashable_bond_participants(
-        account, infraction_height
-    )
-    assert total_slashable_bond > 0, "No slashable stake."
-
-    slash_rate = slash_bps / 10000
-    slash_amount = total_slashable_bond * slash_rate
-    processed_bond = 0
-    allocated_slash = 0
-    self_bond_slashed = 0
-    delegated_slashed = 0
-    pending_unbond_slashed = 0
-
-    # Differences of cumulative targets conserve the slash without charging
-    # a final participant more than their stake when tiny products round to zero.
-    for participant in slash_participants:
-        processed_bond += participant["amount"]
-        cumulative_slash = processed_bond * slash_rate
-        participant_slash = cumulative_slash - allocated_slash
-        allocated_slash = cumulative_slash
-
-        if participant["kind"] == "self_bond":
-            self_bond[account] = self_bond[account] - participant_slash
-            self_bond_slashed = participant_slash
-            continue
-
-        if participant["kind"] == "pending_unbond":
-            unbond_id = participant["unbond_id"]
-            pending_unbond = pending_unbonds[unbond_id]
-            pending_unbond["amount"] = pending_unbond["amount"] - participant_slash
-            pending_unbonds[unbond_id] = pending_unbond
-            pending_unbond_slashed += participant_slash
-            continue
-
-        # Lowers every share's value; shares and earned rewards are untouched.
-        total_delegated[account] = total_delegated[account] - participant_slash
-        delegated_slashed += participant_slash
-
-    total_slashed[account] = total_slashed[account] + slash_amount
+def pay_slash(account: str, amount: decimal, destination: str):
+    assert amount >= 0, "Negative penalty."
+    total_slashed[account] += amount
     last_slashed_at[account] = now
+    if amount > 0:
+        currency.transfer(amount, destination)
 
-    slash_destination = policy("slash_destination")
-    if slash_amount > 0:
-        currency.transfer(slash_amount, slash_destination)
 
+def slash_live_stake(account: str, slash_bps: int, reason: str):
+    rate = slash_bps / 10000
+    self_slashed = self_bond[account] * rate
+    slash_amount = total_bonded(account) * rate
+    delegated_slashed = slash_amount - self_slashed
+    self_bond[account] -= self_slashed
+    total_delegated[account] -= delegated_slashed
+    destination = policy("slash_destination")
+    pay_slash(account, slash_amount, destination)
     return {
         "member": account,
         "slash_bps": slash_bps,
         "slash_amount": slash_amount,
-        "self_bond_slashed": self_bond_slashed,
+        "self_bond_slashed": self_slashed,
         "delegated_slashed": delegated_slashed,
-        "pending_unbond_slashed": pending_unbond_slashed,
-        "destination": slash_destination,
-        "reason": normalize_reason(reason),
+        "pending_unbond_slashed": 0,
+        "destination": destination,
+        "reason": reason,
         "slashed_at": now,
         "remaining_self_bond": self_bond[account],
         "remaining_total_delegated": total_delegated[account],
         "remaining_total_bond": total_bonded(account),
     }
+
+
+def pending_penalty_count(account: str):
+    return penalty_counts[account] or 0
+
+
+def require_no_pending_slash(account: str):
+    assert pending_penalty_count(account) == 0, "Validator penalty pending."
+
+
+def eligible_pending_unbond(account: str, infraction_height: int = None):
+    if infraction_height is None:
+        return False
+    tail = pending_unbond_tails["validator", account]
+    if tail is None:
+        return False
+    if pending_unbonds[tail]["created_block"] < infraction_height:
+        return False
+    return (
+        importlib.import_module("validator_penalties").get_unbond_summary(
+            validator=account
+        )["pending_unbond_total"]
+        > 0
+    )
+
+
+def has_slashable_stake(account: str, infraction_height: int = None):
+    return total_bonded(account) > 0 or eligible_pending_unbond(
+        account, infraction_height
+    )
+
+
+def penalty_reason(reason: str = None):
+    reason = normalize_reason(reason)
+    assert len(reason) <= 256, "Penalty reason is too long."
+    return reason
+
+
+def slash_validator(
+    account: str, slash_bps: int, reason: str = None, infraction_height: int = None
+):
+    assert has_validator_history(account), "Unknown validator."
+    assert is_integer(slash_bps) and slash_bps > 0 and slash_bps <= 10000, (
+        "Bad slash bps."
+    )
+    assert has_slashable_stake(account, infraction_height), "No slashable stake."
+    reason = penalty_reason(reason)
+    if pending_penalty_count(account) > 0 or eligible_pending_unbond(
+        account, infraction_height
+    ):
+        coordinator = importlib.import_module("validator_penalties")
+        return coordinator.enqueue(
+            account=account,
+            slash_bps=slash_bps,
+            reason=reason,
+            infraction_height=infraction_height,
+        )
+    return slash_live_stake(account, slash_bps, reason)
+
+
+def require_penalty_coordinator():
+    assert ctx.caller == "validator_penalties", "Penalty coordinator only."
+
+
+@export
+def apply_pending_slash_part(
+    account: str, kind: str, amount: decimal, unbond_id: int = None
+):
+    require_penalty_coordinator()
+    assert amount >= 0, "Negative penalty."
+    if kind == "self_bond":
+        assert self_bond[account] >= amount, "Penalty exceeds stake."
+        self_bond[account] -= amount
+    elif kind == "delegation_pool":
+        assert total_delegated[account] >= amount, "Penalty exceeds stake."
+        total_delegated[account] -= amount
+    else:
+        assert kind == "pending_unbond", "Invalid penalty participant."
+        unbond = pending_unbonds[unbond_id]
+        assert unbond["validator"] == account and unbond["claimed"] == False, (
+            "Invalid penalty unbond."
+        )
+        assert unbond["amount"] >= amount, "Penalty exceeds stake."
+        unbond["amount"] -= amount
+        pending_unbonds[unbond_id] = unbond
+
+
+@export
+def finish_pending_slash(account: str, amount: decimal, destination: str):
+    require_penalty_coordinator()
+    pay_slash(account, amount, destination)
+
+
+@export
+def rebalance_after_penalties():
+    require_penalty_coordinator()
+    if policy("selection_mode") != "manual":
+        rebalance_validator_set(force=True, require_selection=False)
 
 
 def apply_evidence_penalty_internal(
@@ -1635,26 +1640,11 @@ def apply_evidence_penalty_internal(
     state_changed = False
     reason = infraction_type.lower()
 
-    if slash_bps > 0:
-        slash_participants, total_slashable_bond = slashable_bond_participants(
-            account,
-            evidence_height,
-        )
-        if len(slash_participants) > 0 and total_slashable_bond > 0:
-            slash_result = slash_validator(
-                account,
-                slash_bps,
-                reason,
-                evidence_height,
-            )
-            state_changed = True
+    if slash_bps > 0 and has_slashable_stake(account, evidence_height):
+        slash_result = slash_validator(account, slash_bps, reason, evidence_height)
+        state_changed = True
 
-    if (
-        should_jail
-        and is_jailed(account) == False
-        and is_known_validator(account)
-        and is_last_active_validator(account) == False
-    ):
+    if should_jail and can_jail_member(account):
         jail_validator(account, reason)
         jailed_now = True
         state_changed = True
@@ -1691,9 +1681,7 @@ def validate_manual_override_policy(type_of_vote: str):
         or type_of_vote == "jail_member"
         or type_of_vote == "unjail_member"
     ):
-        assert (
-            policy("manual_override_enabled") == True
-        ), "Overrides off."
+        assert policy("manual_override_enabled") == True, "Overrides off."
 
 
 def validate_vote_argument(type_of_vote: str, arg: Any):
@@ -1705,7 +1693,9 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
                 pending_registrations[arg] == True or statuses[arg] == STATUS_APPROVED
             ), "Member must have pending registration."
         else:
-            assert pending_registrations[arg] == True, "Member must have pending registration."
+            assert pending_registrations[arg] == True, (
+                "Member must have pending registration."
+            )
         assert is_jailed(arg) == False, "Jailed."
         require_min_bonds(arg)
 
@@ -1744,17 +1734,15 @@ def validate_vote_argument(type_of_vote: str, arg: Any):
         assert is_integer(slash_bps), "Slash bps must be an integer."
         validate_optional_string(arg.get("reason"), "Reason")
         if infraction_height is not None:
-            assert is_integer(infraction_height), "Infraction height must be an integer."
+            assert is_integer(infraction_height), (
+                "Infraction height must be an integer."
+            )
             assert infraction_height >= 0, "Infraction height < 0"
         assert has_validator_history(member), "Unknown validator."
         assert slash_bps > 0, "Slash bps <= 0"
         assert slash_bps <= 10000, "Slash bps > 10000"
-        slash_participants, total_slashable_bond = slashable_bond_participants(
-            member,
-            infraction_height,
-        )
-        assert len(slash_participants) > 0, "No slashable stake."
-        assert total_slashable_bond > 0, "No slashable stake."
+        penalty_reason(arg.get("reason"))
+        assert has_slashable_stake(member, infraction_height), "No slashable stake."
 
     if type_of_vote == "set_member_power":
         validate_object_argument(arg, ["member", "power"], ["member", "power"])
@@ -1943,7 +1931,10 @@ def decide_finalize(proposal_id: int):
         - current_vote["yes_weight"]
         - current_vote["no_weight"]
     )
-    if current_vote["yes_weight"] + remaining_weight < current_vote["required_yes_weight"]:
+    if (
+        current_vote["yes_weight"] + remaining_weight
+        < current_vote["required_yes_weight"]
+    ):
         reject_vote(proposal_id)
 
 
@@ -2150,6 +2141,30 @@ def get_validators():
 
 
 @export
+def get_validator_count():
+    return registry_count.get()
+
+
+@export
+def get_validators_page(cursor: int = None, limit: int = 25):
+    assert is_integer(limit) and limit > 0 and limit <= 25, "Invalid page size."
+    if cursor is None:
+        cursor = 0
+    count = registry_count.get()
+    assert is_integer(cursor) and cursor >= 0 and cursor <= count, (
+        "Invalid validator cursor."
+    )
+    end = min(cursor + limit, count)
+    records = [
+        validator_record(registry_accounts[index]) for index in range(cursor, end)
+    ]
+    following = None
+    if end < count:
+        following = end
+    return {"validators": records, "next_cursor": following}
+
+
+@export
 def get_validator(account: str):
     return validator_record(account)
 
@@ -2202,7 +2217,9 @@ def apply_evidence_penalty(
     evidence_height: int = None,
 ):
     assert ctx.caller == SYSTEM_EVIDENCE_CALLER, "Driver only."
-    assert infraction_type == "DUPLICATE_VOTE" or infraction_type == "LIGHT_CLIENT_ATTACK", "Bad infraction."
+    assert (
+        infraction_type == "DUPLICATE_VOTE" or infraction_type == "LIGHT_CLIENT_ATTACK"
+    ), "Bad infraction."
     assert has_validator_history(member), "Unknown validator."
 
     return apply_evidence_penalty_internal(
@@ -2247,7 +2264,9 @@ def record_liveness(absent: list):
     jailed_now = []
     for account in absent_members:
         missed_blocks[account] = missed_blocks[account] + 1
-        if partition == False and missed_blocks[account] >= policy("downtime_jail_blocks"):
+        if partition == False and missed_blocks[account] >= policy(
+            "downtime_jail_blocks"
+        ):
             jail_for_downtime(account)
             jailed_now.append(account)
     return {"absent": absent_members, "partition": partition, "jailed": jailed_now}
@@ -2266,8 +2285,8 @@ def re_enter_after_downtime(account: str):
     else:
         power = selected_validator_power(account)
     admitted = newcomer_power_admitted() + power
-    assert (
-        admitted * 10000 <= policy("max_new_power_bps") * (active_power(members) + power)
+    assert admitted * 10000 <= policy("max_new_power_bps") * (
+        active_power(members) + power
     ), "Newcomer power cap reached; retry next epoch."
     record_admitted_power(power)
     activate_member(account, power)
@@ -2277,7 +2296,9 @@ def re_enter_after_downtime(account: str):
 def unjail():
     account = ctx.caller
     assert is_jailed(account), "Not jailed."
-    assert jail_reasons[account] == "downtime", "Only a downtime jail can be lifted by the validator."
+    assert jail_reasons[account] == "downtime", (
+        "Only a downtime jail can be lifted by the validator."
+    )
     cooldown = datetime.timedelta(hours=policy("downtime_unjail_cooldown_hours"))
     assert now >= last_jailed_at[account] + cooldown, "Unjail cooldown not over."
     unjail_validator(account)
@@ -2326,8 +2347,7 @@ def update_registration(
 ):
     account = ctx.caller
     assert (
-        pending_registrations[account] == True
-        or statuses[account] == STATUS_APPROVED
+        pending_registrations[account] == True or statuses[account] == STATUS_APPROVED
     ), "No pending registration."
 
     update_profile_fields(
@@ -2386,6 +2406,7 @@ def register(
     assert ctx.caller == ctx.signer, "Validators must register from their own account."
     # Hex case variants verify with the same key; only one spelling may register.
     require_canonical_validator_key(ctx.caller)
+    require_no_pending_slash(ctx.caller)
     assert ctx.caller not in active_nodes_list(), "Already a node."
     assert pending_registrations[ctx.caller] == False, "Already pending."
     assert requested_validator_power > 0, "Validator power <= 0"
@@ -2409,8 +2430,8 @@ def register(
     if policy("selection_mode") == "manual":
         eligible_at_epoch[ctx.caller] = 0
     else:
-        eligible_at_epoch[ctx.caller] = (
-            current_selection_epoch() + policy("activation_delay_epochs")
+        eligible_at_epoch[ctx.caller] = current_selection_epoch() + policy(
+            "activation_delay_epochs"
         )
     pending_leave[ctx.caller] = False
     self_bond[ctx.caller] = self_bond[ctx.caller]
@@ -2447,6 +2468,7 @@ def unregister():
 
 @export
 def bond_self(amount: decimal):
+    require_no_pending_slash(ctx.caller)
     assert amount > 0, "Bond amount <= 0"
     # A validator jailed for downtime may top up its own bond to re-enter.
     assert (
@@ -2478,6 +2500,7 @@ def unbond_self(amount: decimal):
 
 @export
 def delegate(validator: str, amount: decimal, reward_key: str = None):
+    require_no_pending_slash(validator)
     delegator = ctx.caller
     assert amount > 0, "Delegation amount <= 0"
     assert validator != delegator, "Use bond_self."
@@ -2501,17 +2524,25 @@ def delegate(validator: str, amount: decimal, reward_key: str = None):
         delegator_reward_keys[delegator, validator] = delegator
 
     DelegatedEvent(
-        {"delegator": delegator, "validator": validator, "amount": amount, "shares": shares}
+        {
+            "delegator": delegator,
+            "validator": validator,
+            "amount": amount,
+            "shares": shares,
+        }
     )
     return get_delegation(delegator, validator)
 
 
 @export
 def undelegate(validator: str, amount: decimal):
+    require_no_pending_slash(validator)
     delegator = ctx.caller
     value = delegation_value(delegator, validator)
     # A position worth nothing (a fully slashed pool) leaves with amount 0.
-    assert amount > 0 or (amount == 0 and value == 0 and delegation_shares[delegator, validator] > 0), "Delegation amount <= 0"
+    assert amount > 0 or (
+        amount == 0 and value == 0 and delegation_shares[delegator, validator] > 0
+    ), "Delegation amount <= 0"
     assert value >= amount, "Not enough delegated stake."
 
     settle_delegator_reward(delegator, validator)
@@ -2520,7 +2551,12 @@ def undelegate(validator: str, amount: decimal):
     reset_reward_debt(delegator, validator)
 
     UndelegatedEvent(
-        {"delegator": delegator, "validator": validator, "amount": released, "shares": shares}
+        {
+            "delegator": delegator,
+            "validator": validator,
+            "amount": released,
+            "shares": shares,
+        }
     )
     if released <= 0:
         return get_delegation(delegator, validator)
@@ -2543,6 +2579,7 @@ def claim_rewards(validator: str):
 def claim_unbond(unbond_id: int):
     unbond = pending_unbonds[unbond_id]
     assert unbond is not None, "Unknown unbond."
+    require_no_pending_slash(unbond["validator"])
     assert unbond["owner"] == ctx.caller, "Not your unbond."
     assert unbond["claimed"] == False, "Unbond already claimed."
     assert now >= unbond["unlock_at"], "Unbond is still locked."
@@ -2551,6 +2588,9 @@ def claim_unbond(unbond_id: int):
         currency.transfer(unbond["amount"], ctx.caller)
     unbond["claimed"] = True
     pending_unbonds[unbond_id] = unbond
+    remove_pending_unbond("owner", ctx.caller, unbond_id)
+    remove_pending_unbond("validator", unbond["validator"], unbond_id)
+    importlib.import_module("validator_penalties").release_unbond(unbond_id=unbond_id)
     return unbond
 
 
@@ -2579,6 +2619,32 @@ def get_pending_unbond(unbond_id: int):
 @export
 def get_pending_unbond_ids(owner: str):
     return owner_pending_unbond_ids(owner)
+
+
+@export
+def get_pending_unbond_page(
+    owner: str, cursor: int = None, limit: int = MAX_UNBOND_PAGE_SIZE
+):
+    assert is_integer(limit) and limit > 0 and limit <= MAX_UNBOND_PAGE_SIZE, (
+        "Invalid page size."
+    )
+    current = pending_unbond_heads["owner", owner]
+    if cursor is not None:
+        assert is_integer(cursor) and cursor > 0, "Invalid unbond cursor."
+        record = pending_unbonds[cursor]
+        assert (
+            record is not None
+            and record["owner"] == owner
+            and record["claimed"] == False
+        ), "Invalid or stale unbond cursor."
+        current = cursor
+    records = []
+    while current is not None and len(records) < limit:
+        record = pending_unbonds[current]
+        record["unbond_id"] = current
+        records.append(record)
+        current = pending_unbond_links["owner", current, "next"]
+    return {"unbonds": records, "next_cursor": current}
 
 
 @export
