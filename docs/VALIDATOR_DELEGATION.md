@@ -14,6 +14,12 @@ The canonical contract source remains
 
 - Validator membership is governed manually through `validators`.
 - The active validator set is the on-chain list `validators.active_validators`.
+- Active validators and pending or approved candidates share a fixed pool of
+  64 accounts. `max_validators` is limited to 1–64. Registration refuses a full
+  pool before collecting its fee; withdrawing or leaving registration frees a
+  slot. Jailed validators retain their slot while registered. Lifting a downtime
+  jail after withdrawal or removal clears the jail, but requires a fresh paid
+  registration before the account can become a validator again.
 - ABCI reads `validators.active_validators` and optional
   `validators.powers:<vk>` to build CometBFT validator updates.
 - Fee rewards are computed by the block executor (vm-core `tx_rewards`): each

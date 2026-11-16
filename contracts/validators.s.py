@@ -83,6 +83,9 @@ STATUS_EXPIRED = "expired"
 DEFAULT_VALIDATOR_POWER = 10
 DEFAULT_COMMISSION_BPS = 0
 MAX_COMMISSION_BPS = 10000
+# Active validators and candidates share a bounded selection pool. Its worst
+# case rebalance and deciding governance vote must fit the chain's chi cap.
+MAX_VALIDATOR_ACCOUNTS = 64
 PASS_THRESHOLD_NUMERATOR = 4
 PASS_THRESHOLD_DENOMINATOR = 5
 PROPOSAL_EXPIRY_DAYS = 7
@@ -303,6 +306,7 @@ def seed(
         if node in active_nodes:
             continue
 
+        require_selection_capacity(node, active_nodes)
         active_nodes.append(node)
         current_registry = validator_registry.get()
         current_registry.append(node)
@@ -569,7 +573,7 @@ POLICY_DEFAULTS = {
 }
 # [minimum, maximum or None] of each integer policy value.
 POLICY_INT_BOUNDS = {
-    "max_validators": [1, None],
+    "max_validators": [1, MAX_VALIDATOR_ACCOUNTS],
     "rebalance_interval": [1, None],
     "activation_delay_epochs": [0, None],
     "unbonding_period_days": [0, None],
@@ -824,6 +828,7 @@ def create_pending_unbond(
 def ensure_candidate(account: str):
     current_candidates = candidate_list()
     if account not in current_candidates:
+        require_selection_capacity(account, all_validator_accounts())
         current_candidates.append(account)
         candidates.set(current_candidates)
 
@@ -868,6 +873,12 @@ def all_validator_accounts():
         if account not in known_accounts:
             known_accounts.append(account)
     return known_accounts
+
+
+def require_selection_capacity(account: str, known_accounts: list):
+    assert (
+        account in known_accounts or len(known_accounts) < MAX_VALIDATOR_ACCOUNTS
+    ), "Validator selection pool full."
 
 
 def ready_for_selection(account: str, selection_epoch: int):
@@ -1375,6 +1386,7 @@ def start_active_stint(account: str):
 
 
 def activate_member(account: str, power: int):
+    require_selection_capacity(account, all_validator_accounts())
     track_validator(account)
     current_nodes = active_nodes_list()
     if account not in current_nodes:
@@ -2269,7 +2281,10 @@ def unjail():
     cooldown = datetime.timedelta(hours=policy("downtime_unjail_cooldown_hours"))
     assert now >= last_jailed_at[account] + cooldown, "Unjail cooldown not over."
     unjail_validator(account)
-    re_enter_after_downtime(account)
+    # Exiting registration refunds its fee and frees its slot. Lifting a
+    # downtime jail must not undo that exit or bypass fresh registration.
+    if statuses[account] == STATUS_APPROVED:
+        re_enter_after_downtime(account)
     return validator_record(account)
 
 
@@ -2375,6 +2390,8 @@ def register(
     assert pending_registrations[ctx.caller] == False, "Already pending."
     assert requested_validator_power > 0, "Validator power <= 0"
     assert is_jailed(ctx.caller) == False, "Jailed."
+
+    require_selection_capacity(ctx.caller, all_validator_accounts())
 
     currency.transfer_from(
         amount=registration_fee.get(),
