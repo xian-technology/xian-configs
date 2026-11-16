@@ -398,6 +398,35 @@ Current policy controls:
 The current defaults are intentionally conservative placeholders, not final
 governance recommendations.
 
+### Evidence Retention
+
+`unbonding_period_days` accepts integers from `0` through `106750`. Constructor
+and governance proposals reject booleans, fractional values, negative periods
+and larger integers before they can become committed policy. The upper bound
+keeps the unbond period plus one day inside CometBFT's signed-int64 nanosecond
+duration range.
+
+The node derives a target evidence duration of
+`(unbonding_period_days + 1) * 86400 * 10^9` nanoseconds. Its committed
+`__evidence_policy` record preserves the complete Comet evidence parameters and
+only increases the active duration and target. Fresh genesis starts at the
+target; subsequent growth advances with elapsed chain time so the historical
+expiry cutoff never moves backward and previously expired proof is not
+readmitted. The configured block-age limit and evidence-byte capacity are
+retained. The canonical mainnet's 14-day unbond policy therefore starts with
+at least 15 days of evidence retention.
+
+CometBFT expires evidence only after both its time and block-age limits have
+been exceeded. The duration bound covers the unbond period independently of
+block rate; an idle empty-block interval is not a minimum block time.
+
+Policy reductions do not shorten existing unbond records or evidence retention.
+The node must capture successful intermediate increases within a block as well
+as the final policy, so increasing the period, creating a long unbond, and
+reducing it again cannot lose the longer retention requirement. Operators must
+preserve the history needed to verify retained evidence; extending a duration
+does not recreate pruned history.
+
 ### Candidate Withdrawal
 
 `unregister()` takes the same exit path for pending or approved validators.

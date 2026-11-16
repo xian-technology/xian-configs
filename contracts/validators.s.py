@@ -104,6 +104,8 @@ DEFAULT_POWER_MODE = "equal"
 DEFAULT_REBALANCE_INTERVAL = 1
 DEFAULT_ACTIVATION_DELAY_EPOCHS = 0
 DEFAULT_UNBONDING_PERIOD_DAYS = 7
+# The unbond period plus one evidence-retention day must fit int64 nanoseconds.
+MAX_UNBONDING_PERIOD_DAYS = 106750
 DEFAULT_MIN_SELF_BOND = 0
 DEFAULT_MIN_TOTAL_BOND = 0
 DEFAULT_MAX_ACTIVE_SET_CHURN = 1
@@ -593,7 +595,7 @@ POLICY_INT_BOUNDS = {
     "max_validators": [1, MAX_VALIDATOR_ACCOUNTS],
     "rebalance_interval": [1, None],
     "activation_delay_epochs": [0, None],
-    "unbonding_period_days": [0, None],
+    "unbonding_period_days": [0, MAX_UNBONDING_PERIOD_DAYS],
     "min_self_bond": [0, None],
     "min_total_bond": [0, None],
     "max_commission_bps": [0, MAX_COMMISSION_BPS],
