@@ -7,20 +7,16 @@
   "block_policy_interval": "5s",
   "operator_profile": "local_development",
   "bootstrap_node_name": "validator-1",
-  "additional_validator_names": [],
   "services": {
     "bds": {
       "enabled": true
     },
     "dashboard": {
       "enabled": true,
-      "host": "127.0.0.1",
       "port": 18080
     },
     "monitoring": {
       "enabled": true
     }
-  },
-  "pruning_enabled": false,
-  "blocks_to_keep": 100000
+  }
 }

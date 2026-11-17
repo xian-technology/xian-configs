@@ -3,24 +3,18 @@
   "name": "single-node-indexed",
   "display_name": "Single-Node Indexed",
   "description": "One node with indexed reads, dashboard access, and monitoring for backend integration work.",
-  "block_policy_mode": "on_demand",
-  "block_policy_interval": "0s",
   "operator_profile": "indexed_development",
   "bootstrap_node_name": "validator-1",
-  "additional_validator_names": [],
   "services": {
     "bds": {
       "enabled": true
     },
     "dashboard": {
       "enabled": true,
-      "host": "127.0.0.1",
       "port": 18080
     },
     "monitoring": {
       "enabled": true
     }
-  },
-  "pruning_enabled": false,
-  "blocks_to_keep": 100000
+  }
 }

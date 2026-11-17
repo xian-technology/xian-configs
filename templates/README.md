@@ -13,6 +13,9 @@
 
 ## Notes
 - Templates are not live network manifests.
+- Templates list intentional overrides of the shared node defaults. Omitted
+  ordinary settings inherit that baseline when the CLI resolves the template;
+  the resulting node profile stores the resolved values explicitly.
 - `xian-cli` consumes these files for `network template ...`,
   `network create --template ...`, and `network join --template ...`.
 - `operator_profile` expresses the intended operator posture for the template:

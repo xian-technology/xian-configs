@@ -25,7 +25,5 @@
     "monitoring": {
       "enabled": true
     }
-  },
-  "pruning_enabled": false,
-  "blocks_to_keep": 100000
+  }
 }
