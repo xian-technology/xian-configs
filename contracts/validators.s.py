@@ -130,7 +130,6 @@ MAX_TOTAL_VOTING_POWER = 1152921504606846975
 # not earn: payouts then never exceed the pool (validators docs, rewards).
 REWARD_DEBT_ROUNDING = decimal("0.000000000000000000000000000001")
 DECIMAL_SCALE = 1000000000000000000000000000000
-EXITED_STATUSES = ["left", "removed", "withdrawn"]
 CANONICAL_KEY_LENGTH = 64
 CANONICAL_KEY_DIGITS = "0123456789abcdef"
 
@@ -789,14 +788,6 @@ def reset_reward_debt(delegator: str, validator: str):
     )
 
 
-def unbond_unlock_at(validator: str, unbonding_period_days: int):
-    # Leaving an exited validator unlocks when its exit's unbonding ends.
-    start = now
-    if statuses[validator] in EXITED_STATUSES and left_at[validator] is not None:
-        start = left_at[validator]
-    return start + datetime.timedelta(days=unbonding_period_days)
-
-
 def next_unbond_id():
     unbond_id = pending_unbond_counter.get() + 1
     pending_unbond_counter.set(unbond_id)
@@ -831,7 +822,6 @@ def create_pending_unbond(
     unbonding_period_days = config["unbonding_period_days"]
     if unbonding_period_days is None:
         unbonding_period_days = DEFAULT_UNBONDING_PERIOD_DAYS
-    unlock_at = unbond_unlock_at(validator, unbonding_period_days)
     unbond_id = next_unbond_id()
     pending_unbond = {
         "id": unbond_id,
@@ -841,7 +831,8 @@ def create_pending_unbond(
         "kind": kind,
         "created_block": current_block_number(),
         "created_at": now,
-        "unlock_at": unlock_at,
+        "unlock_at": None,
+        "unbonding_period_days": unbonding_period_days,
         "claimed": False,
     }
     if reason is not None:
@@ -850,7 +841,9 @@ def create_pending_unbond(
     pending_unbonds[unbond_id] = pending_unbond
     append_pending_unbond("owner", owner, unbond_id)
     append_pending_unbond("validator", validator, unbond_id)
-    importlib.import_module("validator_penalties").track_unbond(unbond_id=unbond_id)
+    penalties = importlib.import_module("validator_penalties")
+    penalties.track_unbond(unbond_id=unbond_id)
+    penalties.track_unbond_time(unbond_id=unbond_id)
     return pending_unbonds[unbond_id]
 
 
@@ -1435,6 +1428,7 @@ def exit_validator(account: str, status: str, refund_bond: bool):
 
     pending_registrations[account] = False
     candidates.set(without_item(candidate_list(), account))
+    importlib.import_module("validator_penalties").track_exit_time(account=account)
     sweep_validator_bonding_state(account, status)
 
 
@@ -2578,12 +2572,24 @@ def claim_rewards(validator: str):
 
 
 @export
+def set_unbond_unlock(unbond_id: int, unlock_at: Any):
+    assert ctx.caller == "validator_penalties", "Penalty coordinator only."
+    record = pending_unbonds[unbond_id]
+    assert record["unlock_at"] is None and unlock_at is not None, (
+        "Unbond already anchored."
+    )
+    record["unlock_at"] = unlock_at
+    pending_unbonds[unbond_id] = record
+
+
+@export
 def claim_unbond(unbond_id: int):
     unbond = pending_unbonds[unbond_id]
     assert unbond is not None, "Unknown unbond."
     require_no_pending_slash(unbond["validator"])
     assert unbond["owner"] == ctx.caller, "Not your unbond."
     assert unbond["claimed"] == False, "Unbond already claimed."
+    assert unbond["unlock_at"] is not None, "Unbond time anchor pending."
     assert now >= unbond["unlock_at"], "Unbond is still locked."
 
     if unbond["amount"] > 0:

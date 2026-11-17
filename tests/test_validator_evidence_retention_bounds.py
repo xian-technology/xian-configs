@@ -100,6 +100,12 @@ def test_supported_period_creates_and_releases_a_real_unbond(
     )
     expected = datetime(2026, 11, 16) + timedelta(days=days)
     unlock = Datetime(expected.year, expected.month, expected.day)
+    if days > 0:
+        assert record["unlock_at"] is None
+        client.get_contract_proxy("validator_penalties").process_time_anchors(
+            signer="__stake_time_driver__", environment={"block_num": 1, "now": start}
+        )
+        record = validators.get_pending_unbond(unbond_id=record["id"])
     assert record["unlock_at"] == unlock
     if days > 0:
         with pytest.raises(AssertionError, match="locked"):
@@ -142,7 +148,14 @@ def test_same_block_policy_reduction_keeps_the_longer_existing_unbond(client):
 
     assert validators.get_policy_config()["unbonding_period_days"] == 7
     assert record["created_block"] == 17
-    assert record["unlock_at"] == Datetime(2026, 11, 30)
+    assert record["unlock_at"] is None
+    client.get_contract_proxy("validator_penalties").process_time_anchors(
+        signer="__stake_time_driver__",
+        environment={"block_num": 18, "now": Datetime(2026, 11, 16)},
+    )
+    assert validators.get_pending_unbond(unbond_id=record["id"])[
+        "unlock_at"
+    ] == Datetime(2026, 11, 30)
     with pytest.raises(AssertionError, match="locked"):
         validators.claim_unbond(
             unbond_id=record["id"],

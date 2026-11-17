@@ -439,9 +439,11 @@ and moves the operator's self bond into a pending unbond (with `reason`
 the validator's pool, which earns nothing once the validator is inactive, and
 each delegator undelegates when it chooses. The exit's cost does not grow with
 delegators, so a validator with any number of delegators can leave or be
-removed. Undelegating from an exited validator unlocks at `left_at` plus the
-unbonding period (at once if that has passed), as the old forced sweep did,
-and the pending unbond stays slashable for infractions at or before its
+removed. The node anchors an exit's withdrawal clock to a strictly later
+finalized block, keeping that immutable exit generation when the validator
+registers or exits again. Undelegating from an exited validator uses that
+anchored exit time plus the captured unbonding period (at once if it has
+already passed). The pending unbond stays slashable for infractions at or before its
 creation. A validator that registers again keeps the delegations it still
 has.
 
@@ -473,6 +475,26 @@ rewards already earned. `get_pending_rewards(delegator, validator)` (and
 ### Claim Unbond
 
 `claim_unbond(unbond_id)` releases funds after the unbonding period.
+A positive-period unbond initially has `unlock_at = null` and stores its
+`unbonding_period_days`. The node processes at most 32 time-anchor jobs before
+user transactions in each block, using only jobs created at a strictly earlier
+height. Its agreed successor-block time starts the captured period; claims
+refuse an unanchored record. This protects the challenge window when the first
+block after a long idle interval has an older BFT timestamp and the next block
+catches up. Backlogged work delays availability conservatively. An explicitly
+zero-day policy remains immediately claimable.
+
+The authenticated FIFO and immutable exit generations live in
+`validator_penalties`. They survive restart and full-store restore. Time
+anchoring can progress while a penalty is pending, but it neither changes
+amounts nor removes the claim freeze. Governance changes do not change a
+record's captured period. The clock uses the contract VM's UTC microsecond
+precision; consensus and evidence retain their exact nanoseconds.
+
+`next_unbond_unlock_at` is the earliest anchored pending date, or `null` when
+there is no anchored item. A positive pending count with a null date means
+unbonds are waiting for a time anchor. The indexed heap orders those unanchored
+items after dated ones and rekeys them when their first date is committed.
 It removes the record from both live ordered indexes while retaining the
 archival record and the double-claim guard. Counts, amounts and earliest unlock
 are maintained as scalar summaries with an indexed minimum heap, so another

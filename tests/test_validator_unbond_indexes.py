@@ -142,7 +142,7 @@ def test_validator_summary_cost_is_independent_of_other_users_pending_unbonds(ch
 
 
 def test_summary_heap_handles_policy_changes_and_arbitrary_claim_order(chain):
-    _, currency, validators = chain
+    client, currency, validators = chain
     from xian_runtime_types.time import Datetime, Timedelta
 
     start = Datetime(2026, 12, 1)
@@ -163,6 +163,12 @@ def test_summary_heap_handles_policy_changes_and_arbitrary_claim_order(chain):
                 validator=NODE, amount=1, signer=DELEGATOR, environment={"now": start}
             )
         )
+    client.get_contract_proxy("validator_penalties").process_time_anchors(
+        signer="__stake_time_driver__", environment={"block_num": 1, "now": start}
+    )
+    records = [
+        validators.get_pending_unbond(unbond_id=record["id"]) for record in records
+    ]
     remaining = {record["id"]: record for record in records}
     for index in [5, 0, 9, 2, 4, 1, 8, 6, 3, 7]:
         unbond_id = records[index]["id"]

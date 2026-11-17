@@ -1,4 +1,14 @@
-"""Bounded pending-unbond penalty coordinator; validators owns all stake writes."""
+"""Bounded unbond timing and penalties; validators owns all stake writes."""
+
+time_anchor_counter = Variable()
+time_anchor_head = Variable()
+time_anchor_jobs = Hash(default_value=None)
+validator_exit_anchors = Hash(default_value=None)
+exit_anchor_times = Hash(default_value=None)
+unbond_exit_anchors = Hash(default_value=None)
+MAX_TIME_ANCHOR_WORK = 32
+SYSTEM_STAKE_TIME_CALLER = "__stake_time_driver__"
+EXITED_STATUSES = ["left", "removed", "withdrawn"]
 
 pending_head = Variable()
 pending_tail = Variable()
@@ -95,6 +105,8 @@ MAX_SLASH_BATCH_WORK = 32
 
 @construct
 def seed():
+    time_anchor_counter.set(0)
+    time_anchor_head.set(None)
     job_counter.set(0)
     job_count.set(0)
 
@@ -128,6 +140,10 @@ def require_validators():
 def unbond_precedes(left: int, right: int):
     left_time = unbonds[left]["unlock_at"]
     right_time = unbonds[right]["unlock_at"]
+    if left_time is None:
+        return right_time is None and left < right
+    if right_time is None:
+        return True
     return left_time < right_time or (left_time == right_time and left < right)
 
 
@@ -203,6 +219,14 @@ def release_unbond(unbond_id: int):
         sift_unbond_down(validator, position)
 
 
+def rekey_unbond(unbond_id: int):
+    record = unbonds[unbond_id]
+    position = unbond_heap_positions[unbond_id]
+    assert position is not None, "Unbond is not indexed."
+    # A time anchor replaces None (infinity) with its first concrete date.
+    sift_unbond_up(record["validator"], position)
+
+
 @export
 def get_unbond_summary(validator: str):
     first = unbond_heap_nodes[validator, 1]
@@ -214,6 +238,88 @@ def get_unbond_summary(validator: str):
         "pending_unbond_total": unbond_totals[validator],
         "next_unbond_unlock_at": unlock,
     }
+
+
+def enqueue_time_anchor(kind: str, reference: Any):
+    job_id = time_anchor_counter.get() + 1
+    time_anchor_counter.set(job_id)
+    time_anchor_jobs[job_id] = {
+        "kind": kind,
+        "reference": reference,
+        "height": current_block_number(),
+    }
+    if time_anchor_head.get() is None:
+        time_anchor_head.set(job_id)
+    return job_id
+
+
+@export
+def track_exit_time(account: str):
+    require_validators()
+    validator_exit_anchors[account] = enqueue_time_anchor("exit", account)
+
+
+def unbond_time_start(unbond_id: int):
+    exit_id = unbond_exit_anchors[unbond_id]
+    if exit_id is not None:
+        return exit_anchor_times[exit_id]
+    return now
+
+
+def anchor_unbond_time(unbond_id: int):
+    record = unbonds[unbond_id]
+    start = unbond_time_start(unbond_id)
+    assert start is not None, "Exit time anchor pending."
+    unlock = start + datetime.timedelta(days=record["unbonding_period_days"])
+    membership().set_unbond_unlock(unbond_id=unbond_id, unlock_at=unlock)
+    rekey_unbond(unbond_id)
+
+
+@export
+def track_unbond_time(unbond_id: int):
+    require_validators()
+    record = unbonds[unbond_id]
+    if view_statuses[record["validator"]] in EXITED_STATUSES:
+        unbond_exit_anchors[unbond_id] = validator_exit_anchors[record["validator"]]
+    if record["unbonding_period_days"] == 0:
+        membership().set_unbond_unlock(unbond_id=unbond_id, unlock_at=now)
+        rekey_unbond(unbond_id)
+    elif (
+        unbond_exit_anchors[unbond_id] is not None
+        and unbond_time_start(unbond_id) is not None
+    ):
+        anchor_unbond_time(unbond_id)
+    else:
+        enqueue_time_anchor("unbond", unbond_id)
+
+
+def process_time_anchor(job_id: int, job: dict):
+    if job["kind"] == "exit":
+        exit_anchor_times[job_id] = now
+    else:
+        anchor_unbond_time(job["reference"])
+    time_anchor_jobs[job_id] = None
+    if job_id == time_anchor_counter.get():
+        time_anchor_head.set(None)
+    else:
+        time_anchor_head.set(job_id + 1)
+
+
+@export
+def process_time_anchors(max_work: int = MAX_TIME_ANCHOR_WORK):
+    assert ctx.caller == SYSTEM_STAKE_TIME_CALLER, "Driver only."
+    assert is_integer(max_work) and 1 <= max_work <= MAX_TIME_ANCHOR_WORK, (
+        "Invalid time anchor batch work."
+    )
+    processed = 0
+    while processed < max_work and time_anchor_head.get() is not None:
+        job_id = time_anchor_head.get()
+        job = time_anchor_jobs[job_id]
+        if job["height"] >= current_block_number():
+            break
+        process_time_anchor(job_id, job)
+        processed += 1
+    return {"processed": processed, "head": time_anchor_head.get()}
 
 
 def pending_cursor(job: dict):

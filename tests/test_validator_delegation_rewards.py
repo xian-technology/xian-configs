@@ -408,7 +408,15 @@ def test_undelegating_from_a_jailed_validator_unbonds_on_the_usual_clock(tmp_pat
 
     # A jailed validator has a left_at too; only an exit moves the clock.
     unbond = chain.get("validators.pending_unbonds:1")
-    assert unbond["unlock_at"] == unbond["created_at"] + Timedelta(days=7)
+    assert unbond["unlock_at"] is None
+    anchor_time = unbond["created_at"] + Timedelta(seconds=1)
+    chain.client.get_contract_proxy("validator_penalties").process_time_anchors(
+        signer="__stake_time_driver__",
+        environment={"block_num": unbond["created_block"] + 1, "now": anchor_time},
+    )
+    assert chain.get("validators.pending_unbonds:1")[
+        "unlock_at"
+    ] == anchor_time + Timedelta(days=7)
 
 
 def test_commission_is_capped_by_the_policy_maximum(tmp_path):
