@@ -183,6 +183,99 @@ def test_the_checked_in_network_manifests_pass(capsys):
     ]
 
 
+@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+def test_unreleased_network_recipes_do_not_claim_registry_image_provenance(network):
+    path = ROOT / "networks" / network / "manifest.json"
+    manifest = read_network_manifest(path)
+    assert manifest["genesis_build"]["status"] == "draft-rehearsal"
+    assert manifest["node_image_mode"] == "local_build"
+    assert manifest["node_integrated_image"] is None
+    assert manifest["node_split_image"] is None
+    expected = {
+        "cometbft_version": "0.40.0",
+        "cometbft_source_commit": "0880b4d378f347ab16e54ec677ff50d803f37d62",
+        "cometbft_source_url": (
+            "https://codeload.github.com/cometbft/cometbft/tar.gz/"
+            "0880b4d378f347ab16e54ec677ff50d803f37d62"
+        ),
+        "cometbft_source_sha256": (
+            "c421c1461494d4e1e922a334f1899aab2f638e990a465316ed6e2437a8d71a66"
+        ),
+    }
+    for key, value in expected.items():
+        assert manifest["node_release_manifest"]["build"][key] == value
+
+
+@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+def test_a_draft_network_uses_local_builds_until_release_inputs_are_final(
+    tmp_path, network
+):
+    path, draft = _canonical(tmp_path, network)
+    validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
+
+    draft.update(
+        node_image_mode="registry",
+        node_integrated_image="ghcr.io/example/node@sha256:" + "a" * 64,
+        node_split_image="ghcr.io/example/split@sha256:" + "b" * 64,
+    )
+    with pytest.raises(SystemExit, match="draft.*local_build"):
+        validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
+
+
+@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+def test_draft_release_finalization_cannot_omit_release_and_image_pins(
+    tmp_path, network
+):
+    path, draft = _canonical(tmp_path, network)
+    draft["genesis_build"]["finalization_required"] = [
+        item
+        for item in draft["genesis_build"]["finalization_required"]
+        if "node_release_manifest" not in item
+    ]
+    with pytest.raises(SystemExit, match="release and image finalization"):
+        validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
+
+
+@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("cometbft_version", "0.39.3"),
+        ("cometbft_source_commit", "0" * 40),
+        ("cometbft_source_url", "https://example.invalid/cometbft.tar.gz"),
+        ("cometbft_source_sha256", "0" * 64),
+    ],
+)
+def test_canonical_networks_reject_a_mixed_comet_source_recipe(
+    tmp_path, network, key, value
+):
+    path, draft = _canonical(tmp_path, network)
+    draft["node_release_manifest"]["build"][key] = value
+    with pytest.raises(SystemExit, match="CometBFT 0.40.0 source recipe"):
+        validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
+
+
+@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+def test_final_networks_require_registry_images_with_immutable_digests(
+    tmp_path, network
+):
+    path, final = _canonical(tmp_path, network)
+    final["genesis_build"]["status"] = "final"
+    final["genesis_sha256"] = "ab" * 32
+    with pytest.raises(SystemExit, match="published registry images"):
+        validate_manifests.CANONICAL_NETWORK_RULES[network](path, final)
+
+    final.update(
+        node_image_mode="registry",
+        node_integrated_image="ghcr.io/example/node@sha256:" + "a" * 64,
+        node_split_image="ghcr.io/example/split@sha256:" + "b" * 64,
+    )
+    validate_manifests.CANONICAL_NETWORK_RULES[network](path, final)
+    final["node_split_image"] = "ghcr.io/example/split:latest"
+    with pytest.raises(SystemExit, match="immutable image digest"):
+        validate_manifests.CANONICAL_NETWORK_RULES[network](path, final)
+
+
 @pytest.mark.parametrize("mode", ["missing", "late"])
 def test_canonical_validator_bundle_requires_its_coordinator_before_membership(mode):
     payload = json.loads((ROOT / "contracts" / "contracts_local.json").read_text())

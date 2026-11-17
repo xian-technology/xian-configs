@@ -2,7 +2,7 @@
   "schema_version": 1,
   "name": "mainnet",
   "chain_id": "xian-mainnet-1",
-  "node_image_mode": "registry",
+  "node_image_mode": "local_build",
   "shielded_relayers": [],
   "privacy_artifact_catalog": {
     "path": "./privacy/artifacts.json",
@@ -24,8 +24,6 @@
   "runtime_features": {
     "zk": true
   },
-  "node_integrated_image": "ghcr.io/xian-technology/xian-node@sha256:f9e086af72697a8e70e1810e369f5c18aa989b152165fad3f997ce4f418c8714",
-  "node_split_image": "ghcr.io/xian-technology/xian-node-split@sha256:701bfe878109646e3b0db090f05e4dd73815435a10aa6fa9a308140cd4609d2e",
   "genesis": {
     "kind": "bundle",
     "bundle": "mainnet",
@@ -60,39 +58,40 @@
     "components": {
       "xian-abci": {
         "repository": "xian-technology/xian-abci",
-        "ref": "165c8e669afed412a37f969333513c56d58a2692"
+        "ref": "1a439ccfe07b835b1f1234313ab1e7f5ee5c561c"
       },
       "xian-configs": {
         "repository": "xian-technology/xian-configs",
-        "ref": "134955cf407dc6b4b7102461644171c4babfc913"
+        "ref": "9184c1dd1fba4eefaeef4842ef316a9f063e5e41"
       },
       "xian-contracting": {
         "repository": "xian-technology/xian-contracting",
-        "ref": "548ad9fc996f5adf7c4101ba18ead298f9f21f45"
+        "ref": "83f8f4ea0977dce7f2f48f9eeb28f6b946ad5494"
       },
       "xian-py": {
         "repository": "xian-technology/xian-py",
-        "ref": "bd9c44626393413ece0cad9f3e5ebac1c275aeba"
+        "ref": "b26c6c78ed25f8a0bbd0d9e58620840447685e5a"
       }
     },
     "build": {
-      "python_image": "python:3.14-bookworm@sha256:4564a2be4617886b3a7ed704c91e31b95efd1f42d5941f5bb5e53efb151edaa3",
-      "go_image": "golang:1.25-bookworm@sha256:29e59af995c51a5bf63d072eca973b918e0e7af4db0e4667aa73f1b8da1a6d8c",
-      "rust_image": "rust:1.95-bookworm@sha256:225aa827d55fae9816a0492284592827e794a5247c6c6a961c3b471b344295ec",
-      "uv_image": "ghcr.io/astral-sh/uv:0.6.11@sha256:fb91e82e8643382d5bce074ba0d167677d678faff4bd518dac670476d19b159c",
+      "python_image": "python:3.14-bookworm@sha256:14e2e26c7b793c42f94c7ad224bce007f0aa7cf47e2ff92bf1e62f58fadcf1d6",
+      "go_image": "golang:1.26.4-bookworm@sha256:b305420a68d0f229d91eb3b3ed9e519fcf2cf5461da4bef997bf927e8c0bfd2b",
+      "rust_image": "rust:1.100.0-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+      "uv_image": "ghcr.io/astral-sh/uv:0.11.25@sha256:1e3808aa9023d0980e7c15b1fa7c1ac16ff35925780cf5c459858b2d693f01a9",
       "debian_snapshot": "20260515T000000Z",
       "source_date_epoch": "1704067200",
-      "pip_version": "26.0.1",
+      "pip_version": "26.1.2",
       "packaging_version": "26.2",
-      "wheel_version": "0.46.3",
-      "maturin_version": "1.13.1",
-      "cometbft_version": "0.39.3",
-      "cometbft_source_url": "https://github.com/cometbft/cometbft/archive/refs/tags/v0.39.3.tar.gz",
-      "cometbft_source_sha256": "f674a39ce3bdb3f62ac547a1c3296142ef1433f56fff185055c50a38b3afeee8",
-      "s6_overlay_version": "3.2.1.0",
-      "s6_overlay_noarch_sha256": "42e038a9a00fc0fef70bf0bc42f625a9c14f8ecdfe77d4ad93281edf717e10c5",
-      "s6_overlay_x86_64_sha256": "8bcbc2cada58426f976b159dcc4e06cbb1454d5f39252b3bb0c778ccf71c9435",
-      "s6_overlay_aarch64_sha256": "c8fd6b1f0380d399422fc986a1e6799f6a287e2cfa24813ad0b6a4fb4fa755cc"
+      "wheel_version": "0.47.0",
+      "maturin_version": "1.14.1",
+      "cometbft_version": "0.40.0",
+      "cometbft_source_url": "https://codeload.github.com/cometbft/cometbft/tar.gz/0880b4d378f347ab16e54ec677ff50d803f37d62",
+      "cometbft_source_sha256": "c421c1461494d4e1e922a334f1899aab2f638e990a465316ed6e2437a8d71a66",
+      "s6_overlay_version": "3.2.3.0",
+      "s6_overlay_noarch_sha256": "b720f9d9340efc8bb07528b9743813c836e4b02f8693d90241f047998b4c53cf",
+      "s6_overlay_x86_64_sha256": "a93f02882c6ed46b21e7adb5c0add86154f01236c93cd82c7d682722e8840563",
+      "s6_overlay_aarch64_sha256": "0952056ff913482163cc30e35b2e944b507ba1025d78f5becbb89367bf344581",
+      "cometbft_source_commit": "0880b4d378f347ab16e54ec677ff50d803f37d62"
     },
     "images": {
       "integrated": "xian-node",

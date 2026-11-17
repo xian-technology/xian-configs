@@ -29,9 +29,20 @@
   rehearsal `testnet`) leave it unset. A draft `mainnet` must list pinning it
   under `genesis_build.finalization_required`; once `genesis_build.status` is no
   longer `draft-rehearsal`, the validator requires the pin.
-- The canonical `testnet` bundle is the richest non-mainnet real-network
-  fixture: it pins published node images and release provenance while still
-  deriving fresh deterministic genesis from the current contract bundle.
+- The canonical `testnet` and `mainnet` bundles are explicit draft rehearsals.
+  They use `local_build` and pin the unmodified CometBFT 0.40.0 source commit
+  and archive checksum in their intended build recipes. They carry no registry
+  image digests until matching images are published and accepted. The recipe is
+  build intent, not an attestation of a previously published image. Finalization
+  must refresh all component/build inputs and pin both immutable image digests;
+  the validator requires registry images once the draft status is removed.
+- A release recipe cannot name its own containing Git commit. A metadata-only
+  follow-up can pin the preceding source commit after proving its contract and
+  code trees are unchanged. The complete image build manifest is authoritative
+  for build inputs; a packaged operator manifest preserves normalized recipe
+  fields and does not independently attest the complete toolchain recipe.
+- The canonical `testnet` bundle is the richest non-mainnet network fixture.
+  It derives fresh deterministic genesis from the current contract bundle.
 - The canonical `mainnet` bundle is a draft rehearsal manifest for
   `xian-mainnet-1`. It derives genesis from `contracts_mainnet.json`, starts
   from one bootstrap validator, enables the chain `zk` runtime feature, and must

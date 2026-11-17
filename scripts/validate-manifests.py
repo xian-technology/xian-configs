@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -45,6 +46,20 @@ CANONICAL_MAINNET_BOOTSTRAP_VALIDATOR = (
     "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e"
 )
 CANONICAL_MAINNET_MAX_VALIDATORS = 13
+CANONICAL_COMET_RELEASE = {
+    "cometbft_version": "0.40.0",
+    "cometbft_source_commit": "0880b4d378f347ab16e54ec677ff50d803f37d62",
+    "cometbft_source_url": (
+        "https://codeload.github.com/cometbft/cometbft/tar.gz/"
+        "0880b4d378f347ab16e54ec677ff50d803f37d62"
+    ),
+    "cometbft_source_sha256": (
+        "c421c1461494d4e1e922a334f1899aab2f638e990a465316ed6e2437a8d71a66"
+    ),
+}
+RELEASE_FINALIZATION_ITEM = (
+    "refresh node_release_manifest and image pins from the stable release train"
+)
 SUPPORTED_PRIVACY_ARTIFACT_KINDS = {
     "shielded_note",
     "shielded_command",
@@ -724,10 +739,55 @@ def _validate_registry_release(
             f"canonical {network} registry image mode requires both node "
             f"images in {manifest_path}"
         )
-    if not isinstance(manifest["node_release_manifest"], dict):
+    for key in ("node_integrated_image", "node_split_image"):
+        if re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", manifest[key]) is None:
+            raise SystemExit(
+                f"canonical {network} must pin an immutable image digest for {key} "
+                f"in {manifest_path}"
+            )
+
+
+def _validate_comet_release(
+    manifest_path: Path, manifest: dict, *, network: str
+) -> None:
+    release = manifest["node_release_manifest"]
+    if not isinstance(release, dict):
         raise SystemExit(
             f"canonical {network} must embed node release provenance in {manifest_path}"
         )
+    if any(
+        release["build"].get(key) != value
+        for key, value in CANONICAL_COMET_RELEASE.items()
+    ):
+        raise SystemExit(
+            f"canonical {network} must pin the CometBFT 0.40.0 source recipe "
+            f"in {manifest_path}"
+        )
+
+
+def _validate_draft_release(
+    manifest_path: Path, manifest: dict, *, network: str
+) -> None:
+    if manifest["node_image_mode"] != "local_build":
+        raise SystemExit(
+            f"draft {network} must use local_build until release images are accepted "
+            f"in {manifest_path}"
+        )
+    items = manifest["genesis_build"].get("finalization_required")
+    if not isinstance(items, list) or RELEASE_FINALIZATION_ITEM not in items:
+        raise SystemExit(
+            f"draft {network} must list release and image finalization in {manifest_path}"
+        )
+
+
+def _validate_runtime_release(
+    manifest_path: Path, manifest: dict, *, network: str
+) -> None:
+    _validate_comet_release(manifest_path, manifest, network=network)
+    if (manifest.get("genesis_build") or {}).get("status") == "draft-rehearsal":
+        _validate_draft_release(manifest_path, manifest, network=network)
+    else:
+        _validate_registry_release(manifest_path, manifest, network=network)
 
 
 def _validate_mainnet_privacy_catalog(manifest_path: Path, manifest: dict) -> None:
@@ -754,7 +814,7 @@ def _validate_mainnet_privacy_catalog(manifest_path: Path, manifest: dict) -> No
 
 def validate_canonical_testnet(manifest_path: Path, manifest: dict) -> None:
     _validate_bundle_genesis(manifest_path, manifest, network="testnet")
-    _validate_registry_release(manifest_path, manifest, network="testnet")
+    _validate_runtime_release(manifest_path, manifest, network="testnet")
 
 
 def validate_canonical_mainnet(manifest_path: Path, manifest: dict) -> None:
@@ -768,7 +828,7 @@ def validate_canonical_mainnet(manifest_path: Path, manifest: dict) -> None:
         raise SystemExit(
             f"canonical mainnet must explicitly enable the zk runtime feature in {manifest_path}"
         )
-    _validate_registry_release(manifest_path, manifest, network="mainnet")
+    _validate_runtime_release(manifest_path, manifest, network="mainnet")
     _validate_mainnet_privacy_catalog(manifest_path, manifest)
 
 
