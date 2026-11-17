@@ -8,6 +8,13 @@
 - Contract changes here affect multiple repos that consume canonical network assets.
 - The active genesis bundle set is `contracts_local.json`, `contracts_devnet.json`,
   `contracts_testnet.json`, and `contracts_mainnet.json`.
+- Every bundle deploys immutable `time_checkpoints` with protocol version 1.
+  Consumers request the current positive VM height before accepting custody,
+  then read its immutable successor timestamp. Only the reserved Node keeper
+  can mark the service ready or process up to 32 older FIFO requests; the
+  service has no callbacks or asset methods. An older runtime that does not
+  run this keeper cannot accept requests. Product bundles declare this platform
+  dependency instead of deploying their own copy.
 - The `validators` constructor args in those bundles must pin the full shipped
   validator policy surface explicitly rather than relying on contract defaults.
 - Every bundle deploys `validator_penalties` before `validators`. The coordinator

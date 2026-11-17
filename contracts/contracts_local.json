@@ -2,6 +2,11 @@
   "extension": ".s.py",
   "contracts": [
     {
+      "name": "time_checkpoints",
+      "owner": null,
+      "constructor_args": null
+    },
+    {
       "name": "permit_authorizer",
       "owner": null,
       "constructor_args": null
