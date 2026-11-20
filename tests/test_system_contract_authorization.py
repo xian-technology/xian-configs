@@ -1,3 +1,4 @@
+import os
 from decimal import ROUND_DOWN, Decimal, localcontext
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from contracting.local import ContractingClient
 from xian_runtime_types.time import Datetime
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACTS_DIR = ROOT / "contracts"
+CONTRACTS_DIR = Path(os.environ.get("XIAN_SYSTEM_CONTRACTS_ROOT", ROOT / "contracts"))
 NODE1 = "a1" * 32
 NODE2 = "b2" * 32
 NODE3 = "c3" * 32
@@ -75,6 +76,39 @@ def test_dao_payout_requires_validators(client):
     assert currency.balance_of(address="dao") == Decimal("33333323.3")
 
 
+@pytest.mark.parametrize(
+    ("owner", "message"), [("", "non-empty"), ("A" * 64, "canonical lowercase")]
+)
+def test_foundation_rejects_invalid_initial_owner(client, owner, message):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    with pytest.raises(AssertionError, match=message):
+        submit_contract(client, "foundation", "foundation.s.py", {"vk": owner})
+
+
+@pytest.mark.parametrize(
+    ("owner", "message"), [("", "non-empty"), ("A" * 64, "canonical lowercase")]
+)
+def test_invalid_foundation_rotation_preserves_withdrawal_and_rotation(
+    client, owner, message
+):
+    currency = submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    foundation = submit_contract(
+        client, "foundation", "foundation.s.py", {"vk": "founder"}
+    )
+    currency.transfer(amount=20, to="foundation", signer="founder")
+
+    with pytest.raises(AssertionError, match=message):
+        foundation.change_owner(vk=owner, signer="founder")
+
+    foundation.withdraw(amount=5, signer="founder")
+    foundation.change_owner(vk=NODE1, signer="founder")
+    with pytest.raises(AssertionError, match="Not owner"):
+        foundation.withdraw(amount=1, signer="founder")
+    foundation.withdraw(amount=15, signer=NODE1)
+    assert currency.balance_of(address="foundation") == 0
+    assert currency.balance_of(address=NODE1) == 15
+
+
 def test_currency_default_seed_preserves_distribution(client):
     currency = submit_contract(
         client,
@@ -136,6 +170,14 @@ def test_chi_cost_update_requires_validators(client):
 # The largest chi rate the node prices fees with (vm-core ``valid_chi_rate``):
 # a stored rate above it stops every validator at the next paid transaction.
 MAX_CHI_RATE = 10**61 - 1
+
+
+@pytest.mark.parametrize(
+    ("rate", "message"), [(0, "greater than 0"), (MAX_CHI_RATE + 1, "Chi cost exceeds")]
+)
+def test_chi_cost_constructor_rejects_invalid_rate(client, rate, message):
+    with pytest.raises(AssertionError, match=message):
+        submit_contract(client, "chi_cost", "chi_cost.s.py", {"initial_rate": rate})
 
 
 def test_chi_cost_refuses_a_rate_the_node_cannot_price_with(client):

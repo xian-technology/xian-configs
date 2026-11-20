@@ -10,11 +10,12 @@ def require_control_contract():
 
 
 def require_valid_rate(rate: int):
-    assert rate > 0, 'New value must be greater than 0'
-    assert rate <= MAX_RATE, 'Chi cost exceeds the largest rate the node can price with.'
+    assert rate > 0, 'The chi rate must be greater than 0.'
+    assert rate <= MAX_RATE, 'Chi cost exceeds the largest chi rate the node can price with.'
 
 @construct
 def seed(initial_rate: int=100):
+    require_valid_rate(initial_rate)
     S['value'] = initial_rate
 
 @export

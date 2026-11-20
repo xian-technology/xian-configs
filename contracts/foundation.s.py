@@ -4,7 +4,7 @@ owner = Variable()
 
 @construct
 def seed(vk: str):
-    owner.set(vk)
+    owner.set(currency.validate_account(vk))
 
 @export
 def withdraw(amount: decimal):
@@ -15,4 +15,4 @@ def withdraw(amount: decimal):
 @export
 def change_owner(vk: str):
     assert ctx.caller == owner.get(), 'Not owner!'
-    owner.set(vk)
+    owner.set(currency.validate_account(vk))

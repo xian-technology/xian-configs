@@ -34,6 +34,9 @@ Native currency transfers reject mixed/uppercase 64-hex account spellings.
 `currency.validate_account` also enforces the 511-byte storage-key boundary;
 validator reward keys and slash destinations use the same validation before
 they can affect payouts.
+The foundation uses that account validation for its initial and replacement
+withdrawal owner. Chi conversion rates must be positive integers no larger
+than `10**61 - 1` at both initialization and governance updates.
 
 ## Wallet and Governance Boundaries
 
