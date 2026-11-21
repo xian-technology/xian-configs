@@ -22,10 +22,12 @@
 - `genesis_sha256` pins a network's genesis: the SHA-256 of the exact
   `config/genesis.json` bytes `xian node init` installs (canonical encoding,
   so `sha256sum <home>/config/genesis.json` on any node prints it). When it is
-  set, `node init`, `network join --init-node` and the operator bundle refuse
-  any other genesis, and `scripts/validate-manifests.py` rebuilds the bundle
-  genesis and rejects a stale pin. Pin it once a network's genesis is fixed;
-  the `local` bundle, which follows the current contracts, leaves it unset. A draft `mainnet` must list pinning it
+  set, `node init`, `network join --init-node`, and the operator bundle refuse
+  any other genesis. Remote deployment checks the prepared node home's genesis
+  when given the pinned manifest. `scripts/validate-manifests.py` rebuilds the
+  bundle genesis and rejects a stale pin. Pin it once a network's genesis is
+  fixed. The `local` bundle follows the current contracts and leaves the hash
+  unset. A draft `mainnet` must list pinning it
   under `genesis_build.finalization_required`; once `genesis_build.status` is no
   longer `draft-rehearsal`, the validator requires the pin.
 - The canonical `mainnet` bundle is an explicit draft rehearsal. It uses `local_build` and pin the unmodified CometBFT 0.40.0 source commit
