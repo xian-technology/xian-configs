@@ -190,7 +190,7 @@ def test_unreleased_network_recipes_do_not_claim_registry_image_provenance(netwo
     assert manifest["genesis_build"]["status"] == "draft-rehearsal"
     assert manifest["node_image_mode"] == "local_build"
     assert manifest["node_integrated_image"] is None
-    assert manifest["node_split_image"] is None
+    assert manifest["node_release_manifest"]["images"] == {"integrated": "xian-node"}
     expected = {
         "cometbft_version": "0.40.0",
         "cometbft_source_commit": "0880b4d378f347ab16e54ec677ff50d803f37d62",
@@ -216,7 +216,6 @@ def test_a_draft_network_uses_local_builds_until_release_inputs_are_final(
     draft.update(
         node_image_mode="registry",
         node_integrated_image="ghcr.io/example/node@sha256:" + "a" * 64,
-        node_split_image="ghcr.io/example/split@sha256:" + "b" * 64,
     )
     with pytest.raises(SystemExit, match="draft.*local_build"):
         validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
@@ -268,11 +267,13 @@ def test_final_networks_require_registry_images_with_immutable_digests(
     final.update(
         node_image_mode="registry",
         node_integrated_image="ghcr.io/example/node@sha256:" + "a" * 64,
-        node_split_image="ghcr.io/example/split@sha256:" + "b" * 64,
     )
     validate_manifests.CANONICAL_NETWORK_RULES[network](path, final)
-    final["node_split_image"] = "ghcr.io/example/split:latest"
+    final["node_integrated_image"] = "ghcr.io/example/node:latest"
     with pytest.raises(SystemExit, match="immutable image digest"):
+        validate_manifests.CANONICAL_NETWORK_RULES[network](path, final)
+    final["node_integrated_image"] = None
+    with pytest.raises(SystemExit, match="requires node_integrated_image"):
         validate_manifests.CANONICAL_NETWORK_RULES[network](path, final)
 
 

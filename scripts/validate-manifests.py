@@ -609,20 +609,17 @@ def _validate_registry_release(
         raise SystemExit(
             f"canonical {network} must pin published registry images in {manifest_path}"
         )
-    if (
-        manifest["node_integrated_image"] is None
-        or manifest["node_split_image"] is None
-    ):
+    image = manifest["node_integrated_image"]
+    if image is None:
         raise SystemExit(
-            f"canonical {network} registry image mode requires both node "
-            f"images in {manifest_path}"
+            f"canonical {network} registry image mode requires "
+            f"node_integrated_image in {manifest_path}"
         )
-    for key in ("node_integrated_image", "node_split_image"):
-        if re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", manifest[key]) is None:
-            raise SystemExit(
-                f"canonical {network} must pin an immutable image digest for {key} "
-                f"in {manifest_path}"
-            )
+    if re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", image) is None:
+        raise SystemExit(
+            f"canonical {network} must pin an immutable image digest for "
+            f"node_integrated_image in {manifest_path}"
+        )
 
 
 def _validate_comet_release(

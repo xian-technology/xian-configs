@@ -96,7 +96,6 @@ def test_draft_operator_bundles_keep_local_build_intent_and_pin_rendered_genesis
     bundled = json.loads(Path(result["manifest_path"]).read_text())
     assert bundled["node_image_mode"] == "local_build"
     assert bundled.get("node_integrated_image") is None
-    assert bundled.get("node_split_image") is None
     assert bundled["genesis_build"]["status"] == "draft-rehearsal"
     assert bundled["node_release_manifest"]["build"]["cometbft_version"] == "0.40.0"
     assert bundled["node_release_manifest"]["build"]["cometbft_source_commit"] == (
