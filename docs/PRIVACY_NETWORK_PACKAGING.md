@@ -43,7 +43,7 @@ That catalog is the approved home for shielded registry manifests.
 
 Current behavior:
 
-- the catalogs are present for `local`, `devnet`, `testnet`, and `mainnet`
+- the catalogs are present for `local` and `mainnet`
 - they currently carry policy and bundle-admission posture
 - they do not yet publish approved shielded registry manifests by default
 

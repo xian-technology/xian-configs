@@ -72,7 +72,7 @@ def test_every_operator_builds_the_same_mainnet_genesis(tmp_path):
     assert json.loads(first)["app_hash"] == json.loads(first)["abci_genesis"]["hash"]
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 def test_draft_operator_bundles_keep_local_build_intent_and_pin_rendered_genesis(
     tmp_path, capsys, network
 ):

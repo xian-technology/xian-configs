@@ -33,7 +33,7 @@ def ready(service):
     assert service.process_time_anchors(signer=SYSTEM, environment=env(1)) == 0
 
 
-@pytest.mark.parametrize("network", ["local", "devnet", "testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["local", "mainnet"])
 def test_canonical_bundles_deploy_the_immutable_registry(network):
     payload = json.loads((ROOT / f"contracts/contracts_{network}.json").read_text())
     matches = [item for item in payload["contracts"] if item["name"] == "time_checkpoints"]

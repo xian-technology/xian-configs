@@ -13,7 +13,7 @@ from xian_runtime_types.decimal import ContractingDecimal, canonical_fixed
 from xian_runtime_types.numeric_wire import decode_wire_numbers
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ACTIVE_BUNDLE_NAMES = ("local", "devnet", "testnet", "mainnet")
+ACTIVE_BUNDLE_NAMES = ("local", "mainnet")
 REQUIRED_VALIDATORS_CONSTRUCTOR_ARGS = (
     "genesis_nodes",
     "genesis_registration_fee",
@@ -40,7 +40,6 @@ REQUIRED_VALIDATORS_CONSTRUCTOR_ARGS = (
     "downtime_slash_bps",
     "downtime_unjail_cooldown_hours",
 )
-CANONICAL_TESTNET_NODE_COUNT = 5
 CANONICAL_MAINNET_CHAIN_ID = "xian-mainnet-1"
 CANONICAL_MAINNET_BOOTSTRAP_VALIDATOR = (
     "7fa496ca2438e487cc45a8a27fd95b2efe373223f7b72868fbab205d686be48e"
@@ -360,127 +359,6 @@ def validate_contract_bundles() -> None:
             contracts=contracts,
             bundle_path=bundle_path,
         )
-
-        if bundle_name == "testnet":
-            if len(genesis_nodes) != CANONICAL_TESTNET_NODE_COUNT:
-                raise SystemExit(
-                    "canonical testnet must define exactly "
-                    f"{CANONICAL_TESTNET_NODE_COUNT} genesis nodes in {bundle_path}"
-                )
-
-            genesis_powers = constructor_args.get("genesis_powers")
-            if not isinstance(genesis_powers, dict):
-                raise SystemExit(
-                    "canonical testnet must define explicit genesis_powers in "
-                    f"{bundle_path}"
-                )
-            if sorted(genesis_powers) != sorted(genesis_nodes):
-                raise SystemExit(
-                    "canonical testnet genesis_powers keys must match "
-                    f"genesis_nodes exactly in {bundle_path}"
-                )
-            if any(
-                not isinstance(power, int) or power <= 0
-                for power in genesis_powers.values()
-            ):
-                raise SystemExit(
-                    "canonical testnet genesis_powers must be positive integers "
-                    f"in {bundle_path}"
-                )
-
-            genesis_reward_keys = constructor_args.get("genesis_reward_keys")
-            if not isinstance(genesis_reward_keys, dict):
-                raise SystemExit(
-                    "canonical testnet must define explicit genesis_reward_keys in "
-                    f"{bundle_path}"
-                )
-            if sorted(genesis_reward_keys) != sorted(genesis_nodes):
-                raise SystemExit(
-                    "canonical testnet genesis_reward_keys keys must match "
-                    f"genesis_nodes exactly in {bundle_path}"
-                )
-            if any(
-                not isinstance(reward_key, str) or not reward_key
-                for reward_key in genesis_reward_keys.values()
-            ):
-                raise SystemExit(
-                    "canonical testnet genesis_reward_keys values must be "
-                    f"non-empty strings in {bundle_path}"
-                )
-
-            governance_contract = next(
-                (
-                    contract
-                    for contract in contracts
-                    if contract.get("name") == "governance"
-                ),
-                None,
-            )
-            if governance_contract is None:
-                raise SystemExit(
-                    f"canonical testnet missing governance contract in {bundle_path}"
-                )
-            governance_args = governance_contract.get("constructor_args")
-            if not isinstance(governance_args, dict):
-                raise SystemExit(
-                    "canonical testnet must pin governance constructor_args in "
-                    f"{bundle_path}"
-                )
-            missing_governance_keys = [
-                key
-                for key in REQUIRED_GOVERNANCE_CONSTRUCTOR_ARGS
-                if key not in governance_args
-            ]
-            if missing_governance_keys:
-                raise SystemExit(
-                    "canonical testnet governance constructor_args must pin the "
-                    f"full surface in {bundle_path}; missing "
-                    f"{missing_governance_keys}"
-                )
-            if governance_args["membership_contract_name"] != "validators":
-                raise SystemExit(
-                    "canonical testnet governance membership_contract_name must "
-                    f"be validators in {bundle_path}"
-                )
-            if (
-                not isinstance(governance_args["approval_threshold_numerator"], int)
-                or not isinstance(
-                    governance_args["approval_threshold_denominator"], int
-                )
-                or governance_args["approval_threshold_numerator"] <= 0
-                or governance_args["approval_threshold_denominator"] <= 0
-                or governance_args["approval_threshold_numerator"]
-                > governance_args["approval_threshold_denominator"]
-            ):
-                raise SystemExit(
-                    "canonical testnet governance approval threshold must be a "
-                    f"valid positive ratio in {bundle_path}"
-                )
-            if (
-                not isinstance(governance_args["emergency_threshold_numerator"], int)
-                or not isinstance(
-                    governance_args["emergency_threshold_denominator"], int
-                )
-                or governance_args["emergency_threshold_numerator"] <= 0
-                or governance_args["emergency_threshold_denominator"] <= 0
-                or governance_args["emergency_threshold_numerator"]
-                > governance_args["emergency_threshold_denominator"]
-            ):
-                raise SystemExit(
-                    "canonical testnet governance emergency threshold must be a "
-                    f"valid positive ratio in {bundle_path}"
-                )
-            for key in (
-                "proposal_expiry_days",
-                "min_patch_delay_blocks",
-                "emergency_patch_delay_blocks",
-            ):
-                value = governance_args[key]
-                if not isinstance(value, int) or value <= 0:
-                    raise SystemExit(
-                        f"canonical testnet governance {key} must be a "
-                        f"positive integer in {bundle_path}"
-                    )
 
         if bundle_name == "mainnet":
             if genesis_nodes != [CANONICAL_MAINNET_BOOTSTRAP_VALIDATOR]:
@@ -812,11 +690,6 @@ def _validate_mainnet_privacy_catalog(manifest_path: Path, manifest: dict) -> No
         )
 
 
-def validate_canonical_testnet(manifest_path: Path, manifest: dict) -> None:
-    _validate_bundle_genesis(manifest_path, manifest, network="testnet")
-    _validate_runtime_release(manifest_path, manifest, network="testnet")
-
-
 def validate_canonical_mainnet(manifest_path: Path, manifest: dict) -> None:
     if manifest["chain_id"] != CANONICAL_MAINNET_CHAIN_ID:
         raise SystemExit(
@@ -833,7 +706,6 @@ def validate_canonical_mainnet(manifest_path: Path, manifest: dict) -> None:
 
 
 CANONICAL_NETWORK_RULES = {
-    "testnet": validate_canonical_testnet,
     "mainnet": validate_canonical_mainnet,
 }
 

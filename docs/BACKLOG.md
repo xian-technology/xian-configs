@@ -12,8 +12,8 @@ Current themes:
 
 The draft mainnet allocation assigns `66,666,666.60` XIAN (60% of the
 `111,111,111` total supply) to `team_lock`, but `contracts_mainnet.json` does
-not deploy a contract at that address. The local, devnet, and testnet bundles
-use the same balance through `currency.s.py` defaults and also omit a
+not deploy a contract at that address. The local bundle
+uses the same balance through `currency.s.py` defaults and also omits a
 `team_lock` deployment.
 
 `team_lock` is not a signing public key. The normal submission contract only

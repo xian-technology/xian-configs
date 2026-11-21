@@ -22,7 +22,7 @@ Inspect the canonical templates from `xian-cli`:
 
 ```bash
 uv run --project ../xian-cli xian network template list
-uv run --project ../xian-cli xian network template show single-node-indexed
+uv run --project ../xian-cli xian network template show validator
 ```
 
 Validate manifests and contract assets locally:
@@ -74,12 +74,13 @@ network created from this repo, but they are not part of this network catalog.
 
 ## Key Directories
 
-- `networks/` — manifests and genesis files for canonical networks
-  (`devnet/`, `testnet/`, `local/`, `mainnet/`).
+- `networks/` — manifests and genesis files for the canonical networks:
+  `local/` (development and localnets) and `mainnet/`.
 - `contracts/` — canonical contract manifests and source assets referenced by
   the networks above.
-- `templates/` — reusable starter templates for creating purposeful Xian
-  networks (`single-node-dev`, `single-node-indexed`, `consortium-5`).
+- `templates/` — node templates: `single-node-dev` (a complete local
+  development node) and `validator` (a lean node for joining a shared
+  network).
 - `contracts/templates/` — source templates used to generate reusable contract
   assets such as token-factory children.
 - `scripts/` — validation helpers for manifests, templates, generated system

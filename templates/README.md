@@ -19,7 +19,11 @@
 - `xian-cli` consumes these files for `network template ...`,
   `network create --template ...`, and `network join --template ...`.
 - `operator_profile` expresses the intended operator posture for the template:
-  local development, indexed development, or shared network.
+  local development or shared network.
+- Two templates ship: `single-node-dev` for a complete local development node
+  and `validator` for joining a shared network (mainnet) as a validator or full
+  node. `validator` runs the node and monitoring only; BDS, GraphQL and the
+  dashboard stay off, and every published port binds to loopback.
 - `services` contains the sidecars that the generated node profile should
   enable. `services.bds.enabled` controls the Blockchain Data Service; it is
   the only BDS field a template accepts. BDS connection and tuning settings are

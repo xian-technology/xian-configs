@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "validator",
+  "display_name": "Validator",
+  "description": "Lean validator or full node for a shared network: the node plus monitoring, every port bound to loopback.",
+  "operator_profile": "shared_network",
+  "bootstrap_node_name": "validator-1",
+  "services": {
+    "bds": {
+      "enabled": false
+    },
+    "dashboard": {
+      "enabled": false
+    },
+    "monitoring": {
+      "enabled": true
+    }
+  }
+}

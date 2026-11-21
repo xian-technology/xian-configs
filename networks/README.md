@@ -25,12 +25,10 @@
   set, `node init`, `network join --init-node` and the operator bundle refuse
   any other genesis, and `scripts/validate-manifests.py` rebuilds the bundle
   genesis and rejects a stale pin. Pin it once a network's genesis is fixed;
-  bundles that still follow the current contracts (`local`, `devnet`, the
-  rehearsal `testnet`) leave it unset. A draft `mainnet` must list pinning it
+  the `local` bundle, which follows the current contracts, leaves it unset. A draft `mainnet` must list pinning it
   under `genesis_build.finalization_required`; once `genesis_build.status` is no
   longer `draft-rehearsal`, the validator requires the pin.
-- The canonical `testnet` and `mainnet` bundles are explicit draft rehearsals.
-  They use `local_build` and pin the unmodified CometBFT 0.40.0 source commit
+- The canonical `mainnet` bundle is an explicit draft rehearsal. It uses `local_build` and pin the unmodified CometBFT 0.40.0 source commit
   and archive checksum in their intended build recipes. They carry no registry
   image digests until matching images are published and accepted. The recipe is
   build intent, not an attestation of a previously published image. Finalization
@@ -41,8 +39,9 @@
   code trees are unchanged. The complete image build manifest is authoritative
   for build inputs; a packaged operator manifest preserves normalized recipe
   fields and does not independently attest the complete toolchain recipe.
-- The canonical `testnet` bundle is the richest non-mainnet network fixture.
-  It derives fresh deterministic genesis from the current contract bundle.
+- The `local` bundle serves the single-node dev node and multi-node
+  localnets (including the 5-validator end-to-end and protocol-safety runs,
+  whose genesis sets the localnet's own validators and founder).
 - The canonical `mainnet` bundle is a draft rehearsal manifest for
   `xian-mainnet-1`. It derives genesis from `contracts_mainnet.json`, starts
   from one bootstrap validator, enables the chain `zk` runtime feature, and must

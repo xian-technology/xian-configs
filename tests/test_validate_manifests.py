@@ -131,7 +131,7 @@ def _canonical(tmp_path: Path, network: str, **changes) -> tuple[Path, dict]:
     return path, read_network_manifest(path)
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 def test_canonical_networks_pass_their_rules(network):
     path = ROOT / "networks" / network / "manifest.json"
     validate_manifests.CANONICAL_NETWORK_RULES[network](
@@ -143,12 +143,12 @@ def test_canonical_networks_pass_their_rules(network):
     ("network", "changes", "message"),
     [
         (
-            "testnet",
-            {"genesis": {"kind": "bundle", "bundle": "testnet", "genesis_time": None}},
+            "mainnet",
+            {"genesis": {"kind": "bundle", "bundle": "mainnet", "genesis_time": None}},
             "must pin genesis_time",
         ),
         (
-            "testnet",
+            "mainnet",
             {"node_release_manifest": None},
             "must embed node release provenance",
         ),
@@ -160,7 +160,7 @@ def test_canonical_networks_pass_their_rules(network):
         ),
         (
             "mainnet",
-            {"genesis": {"kind": "bundle", "bundle": "testnet", "genesis_time": "x"}},
+            {"genesis": {"kind": "bundle", "bundle": "local", "genesis_time": "x"}},
             "derive genesis from the mainnet bundle",
         ),
     ],
@@ -179,11 +179,11 @@ def test_the_checked_in_network_manifests_pass(capsys):
     validated = capsys.readouterr().out.splitlines()
     assert validated == [
         f"validated networks/{name}/manifest.json"
-        for name in ("devnet", "local", "mainnet", "testnet")
+        for name in ("local", "mainnet")
     ]
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 def test_unreleased_network_recipes_do_not_claim_registry_image_provenance(network):
     path = ROOT / "networks" / network / "manifest.json"
     manifest = read_network_manifest(path)
@@ -206,7 +206,7 @@ def test_unreleased_network_recipes_do_not_claim_registry_image_provenance(netwo
         assert manifest["node_release_manifest"]["build"][key] == value
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 def test_a_draft_network_uses_local_builds_until_release_inputs_are_final(
     tmp_path, network
 ):
@@ -222,7 +222,7 @@ def test_a_draft_network_uses_local_builds_until_release_inputs_are_final(
         validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 def test_draft_release_finalization_cannot_omit_release_and_image_pins(
     tmp_path, network
 ):
@@ -236,7 +236,7 @@ def test_draft_release_finalization_cannot_omit_release_and_image_pins(
         validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 @pytest.mark.parametrize(
     ("key", "value"),
     [
@@ -255,7 +255,7 @@ def test_canonical_networks_reject_a_mixed_comet_source_recipe(
         validate_manifests.CANONICAL_NETWORK_RULES[network](path, draft)
 
 
-@pytest.mark.parametrize("network", ["testnet", "mainnet"])
+@pytest.mark.parametrize("network", ["mainnet"])
 def test_final_networks_require_registry_images_with_immutable_digests(
     tmp_path, network
 ):
