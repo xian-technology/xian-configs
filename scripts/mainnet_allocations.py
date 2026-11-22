@@ -18,6 +18,8 @@ SCHEMA = "xian.mainnet_allocations.v1"
 CHAIN_ID = "xian-mainnet-1"
 # A plain non-negative decimal with at most the VM's 30 fractional digits.
 AMOUNT_TEXT = re.compile(r"[0-9]+(\.[0-9]{1,30})?")
+# Exclusive upper bound of a V2 decimal, including currency's summed supply.
+DECIMAL_SUPPLY_LIMIT = Decimal("1e61")
 # An account key as signers spend from it: lowercase 64-hex.
 ACCOUNT_KEY = re.compile(r"[0-9a-f]{64}")
 # A named holder (a contract), as the submission contract allows names.
@@ -101,8 +103,11 @@ def load_allocation_balances(path: Path) -> dict[str, str]:
         require_account(account): require_amount(account, amount)
         for account, amount in balances.items()
     }
-    if allocation_total(normalized) <= 0:
+    total = allocation_total(normalized)
+    if total <= 0:
         raise ValueError(f"allocation total supply must be positive in {path}")
+    if total >= DECIMAL_SUPPLY_LIMIT:
+        raise ValueError(f"allocation total supply exceeds the VM decimal range in {path}")
     return normalized
 
 

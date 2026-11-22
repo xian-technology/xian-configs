@@ -120,6 +120,28 @@ def test_a_single_holder_of_one_token_is_a_valid_allocation(tmp_path):
     assert sync.load_allocation_balances(path) == {KEY: "1"}
 
 
+@pytest.mark.parametrize(
+    "balances",
+    (
+        {KEY: "1" + "0" * 61},
+        {KEY: "9" * 61 + "." + "9" * 30, "dao": "0." + "0" * 29 + "1"},
+    ),
+    ids=("balance-overflow", "supply-overflow"),
+)
+def test_allocations_that_overflow_genesis_are_refused(tmp_path, balances):
+    path = _write(tmp_path, json.dumps(balances))
+
+    with pytest.raises(ValueError, match="total supply exceeds the VM decimal range"):
+        sync.load_allocation_balances(path)
+
+
+def test_maximum_representable_allocation_is_valid(tmp_path):
+    balances = {KEY: "9" * 61 + "." + "9" * 30}
+    path = _write(tmp_path, json.dumps(balances))
+
+    assert sync.load_allocation_balances(path) == balances
+
+
 def test_the_bundle_receives_the_allocation_text_unchanged():
     bundle = json.loads((ROOT / "contracts" / "contracts_mainnet.json").read_text())
     balances = {KEY: "0.100000000000000000000000000000", "dao": "7"}
