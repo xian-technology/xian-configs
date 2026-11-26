@@ -103,6 +103,15 @@ def test_invalid_foundation_rotation_preserves_withdrawal_and_rotation(
     foundation.withdraw(amount=5, signer="founder")
     foundation.change_owner(vk=NODE1, signer="founder")
     with pytest.raises(AssertionError, match="Not owner"):
+        foundation.withdraw(amount=1, signer=NODE1)
+    with pytest.raises(AssertionError, match="pending owner"):
+        foundation.accept_ownership(signer=NODE2)
+    foundation.cancel_ownership_transfer(signer="founder")
+    with pytest.raises(AssertionError, match="No pending"):
+        foundation.accept_ownership(signer=NODE1)
+    foundation.change_owner(vk=NODE1, signer="founder")
+    foundation.accept_ownership(signer=NODE1)
+    with pytest.raises(AssertionError, match="Not owner"):
         foundation.withdraw(amount=1, signer="founder")
     foundation.withdraw(amount=15, signer=NODE1)
     assert currency.balance_of(address="foundation") == 0
@@ -370,10 +379,10 @@ def test_vault_cannot_remove_last_owner(client):
     assert currency.balance_of(address="alice") == 1
 
 
-@pytest.mark.parametrize("owners", ["", "alice,alice", "alice, ,bob"])
-def test_vault_seed_requires_distinct_nonempty_owners(client, owners):
+@pytest.mark.parametrize("owners", ["", "alice,alice", "alice, ,bob", "B" * 64])
+def test_vault_seed_requires_distinct_valid_owners(client, owners):
     submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
-    with pytest.raises(AssertionError, match="owner"):
+    with pytest.raises(AssertionError, match="owner|canonical lowercase"):
         submit_contract(
             client,
             "team_lock",
@@ -435,6 +444,37 @@ def test_slashing_keeps_nonnegative_balances_and_conserves_value(
         )
         assert 0 <= record["total_delegated"] - sum(values) < Decimal("3e-30")
     assert currency.balance_of(address="validators") == record["total_bond"]
+
+
+def test_governance_rejects_non_boolean_emergency_and_vote_values(client):
+    _deploy_validators(client, {"genesis_nodes": [NODE1, NODE2]})
+    governance = submit_contract(
+        client,
+        "governance",
+        "governance.s.py",
+        {"membership_contract_name": "validators"},
+    )
+    environment = {"now": Datetime(2026, 1, 1), "block_num": 10}
+    patch = {
+        "patch_id": "reviewed-patch",
+        "bundle_hash": "abc123",
+        "activation_height": 30,
+        "signer": NODE1,
+        "environment": environment,
+    }
+    with pytest.raises(AssertionError, match="emergency must be a boolean"):
+        governance.propose_state_patch(emergency="false", **patch)
+
+    proposal = governance.propose_state_patch(**patch)
+    assert proposal["yes_votes"] == 1
+    vote = {"proposal_id": 1, "signer": NODE2, "environment": environment}
+    with pytest.raises(AssertionError, match="support must be a boolean"):
+        governance.vote(support="false", **vote)
+
+    proposal = governance.vote(support=False, **vote)
+    assert proposal["yes_votes"] == 1
+    assert proposal["no_votes"] == 1
+    assert proposal["status"] == "rejected"
 
 
 def test_state_patch_votes_reject_passed_activation_height(client):
@@ -563,6 +603,10 @@ def test_vault_owner_changes_keep_count_and_quorum_consistent(client):
     vault.submit_transaction(to="carol", tx_type="addOwner", signer="alice")
     vault.approve_transaction(tx_id=1, signer="bob")
     vault.execute_transaction(tx_id=1, signer="alice")
+    assert vault.owners["carol"] is not True
+    with pytest.raises(AssertionError, match="invitee"):
+        vault.accept_ownership(signer="bob")
+    vault.accept_ownership(signer="carol")
     assert vault.owners["carol"] is True
     assert vault.owner_count.get() == 3
     vault.submit_transaction(to="carol", tx_type="addOwner", signer="alice")
@@ -583,8 +627,27 @@ def test_vault_owner_changes_keep_count_and_quorum_consistent(client):
         vault.submit_transaction(to="bob", amount=1, signer="carol")
 
 
+def test_vault_quorum_can_revoke_an_unaccepted_invitation(client):
+    submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
+    vault = submit_contract(
+        client,
+        "team_lock",
+        "vault.s.py",
+        {"initial_owners": "alice", "initial_required_signatures": 1},
+    )
+    vault.submit_transaction(to="bob", tx_type="addOwner", signer="alice")
+    vault.execute_transaction(tx_id=1, signer="alice")
+    vault.submit_transaction(to="bob", tx_type="removeOwner", signer="alice")
+    vault.execute_transaction(tx_id=2, signer="alice")
+    with pytest.raises(AssertionError, match="invitee"):
+        vault.accept_ownership(signer="bob")
+    assert vault.owner_count.get() == 1
+    assert vault.required_signatures.get() == 1
+
+
 @pytest.mark.parametrize(
-    "requirement,allowed", [(0, False), (1, True), (2, True), (3, False)]
+    "requirement,allowed",
+    [(0, False), (1, True), (2, True), (3, False), (Decimal("1.9"), False)],
 )
 def test_vault_quorum_changes_require_positive_attainable_value(
     client, requirement, allowed
@@ -609,8 +672,8 @@ def test_vault_quorum_changes_require_positive_attainable_value(
         assert vault.required_signatures.get() == 2
 
 
-@pytest.mark.parametrize("new_owner", ["", " ", "\t"])
-def test_vault_cannot_add_empty_owner(client, new_owner):
+@pytest.mark.parametrize("new_owner", ["", " ", "\t", "B" * 64])
+def test_vault_cannot_add_invalid_owner(client, new_owner):
     submit_contract(client, "currency", "currency.s.py", {"vk": "founder"})
     vault = submit_contract(
         client,
@@ -619,7 +682,7 @@ def test_vault_cannot_add_empty_owner(client, new_owner):
         {"initial_owners": "alice", "initial_required_signatures": 1},
     )
     vault.submit_transaction(to=new_owner, tx_type="addOwner", signer="alice")
-    with pytest.raises(AssertionError, match="owner"):
+    with pytest.raises(AssertionError, match="owner|canonical lowercase"):
         vault.execute_transaction(tx_id=1, signer="alice")
     assert vault.owner_count.get() == 1
     assert vault.required_signatures.get() == 1

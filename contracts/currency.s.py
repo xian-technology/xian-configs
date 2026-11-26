@@ -47,7 +47,10 @@ def require_canonical_hex_account(account: str):
 
 @export
 def validate_account(account: str):
-    assert account != "", "Account must be non-empty."
+    assert isinstance(account, str) and account != "", "Account must be non-empty."
+    assert ":" not in account and "." not in account, (
+        "Account contains a reserved storage separator."
+    )
     assert len(account.encode("utf-8")) <= 511 - len("currency.balances:"), (
         "Account exceeds the storage key limit."
     )
@@ -56,13 +59,14 @@ def validate_account(account: str):
 
 
 def seed_default_balances(vk: str):
-    balances[vk] = 5555555.55  # 5% Team Tokens
-    balances["team_lock"] = 16666666.65  # 15% Team allocation
-    balances["dao"] = 33333333.3  # Full DAO allocation
-    balances["team_lock"] += 49999999.95  # 45% Second batch of public tokens
-    balances[vk] += 5555555.55  # 5% Seed participation tokens
-
-    return balances[vk] + balances["team_lock"] + balances["dao"]
+    founder = validate_account(vk)
+    founder_allocation = 11111111.1  # 5% team and 5% seed participation
+    team_allocation = 66666666.6  # 15% team and 45% public tokens
+    dao_allocation = 33333333.3
+    balances["team_lock"] = team_allocation
+    balances["dao"] = dao_allocation
+    balances[founder] += founder_allocation
+    return founder_allocation + team_allocation + dao_allocation
 
 
 def seed_configured_balances(initial_balances: dict):

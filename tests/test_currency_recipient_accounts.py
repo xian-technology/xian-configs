@@ -67,6 +67,34 @@ def test_configured_genesis_rejects_noncanonical_hex_accounts(client, recipient)
         )
 
 
+@pytest.mark.parametrize("recipient", ["", *BAD_KEYS])
+def test_default_genesis_rejects_invalid_founder_accounts(client, recipient):
+    with pytest.raises(AssertionError, match="non-empty|canonical lowercase"):
+        client.submit(SOURCE, name="currency", constructor_args={"vk": recipient})
+
+
+@pytest.mark.parametrize(
+    ("founder", "dao_balance", "team_balance"),
+    [("dao", "44444444.4", "66666666.6"), ("team_lock", "33333333.3", "77777777.7")],
+)
+def test_default_genesis_combines_allocations_to_the_same_account(
+    client, founder, dao_balance, team_balance
+):
+    client.submit(SOURCE, name="currency", constructor_args={"vk": founder})
+    token = client.get_contract_proxy("currency")
+    assert token.balance_of(address="dao") == Decimal(dao_balance)
+    assert token.balance_of(address="team_lock") == Decimal(team_balance)
+    assert token.metadata["total_supply"] == 111111111
+
+
+@pytest.mark.parametrize("recipient", ["invalid:key", "invalid.key"])
+def test_account_validator_rejects_reserved_storage_separators(client, recipient):
+    client.submit(SOURCE, name="currency", constructor_args={"vk": "founder"})
+    token = client.get_contract_proxy("currency")
+    with pytest.raises(AssertionError, match="storage separator"):
+        token.validate_account(account=recipient)
+
+
 @pytest.mark.parametrize("recipient", [KEY, "dao", "con_" + "g" * 60])
 def test_transfers_preserve_valid_keys_and_named_destinations(client, recipient):
     client.submit(SOURCE, name="currency", constructor_args={"vk": "founder"})

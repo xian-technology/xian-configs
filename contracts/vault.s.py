@@ -1,6 +1,7 @@
 import currency
 
 owners = Hash()
+owner_invitations = Hash()
 required_signatures = Variable()
 owner_count = Variable()
 transaction_count = Variable()
@@ -22,7 +23,7 @@ def seed(initial_owners: str, initial_required_signatures: int):
     """
     owner_list = []
     for owner in initial_owners.split(','):
-        owner = normalize_owner(owner)
+        owner = currency.validate_account(normalize_owner(owner))
         assert owner not in owner_list, 'Duplicate owner.'
         owner_list.append(owner)
 
@@ -102,20 +103,23 @@ def execute_transaction(tx_id: int):
     if tx_type == 'transfer':
         currency.transfer(amount=amount, to=to)
     elif tx_type == 'addOwner':
-        to = normalize_owner(to)
+        to = currency.validate_account(normalize_owner(to))
         assert not owners[to], 'Address is already an owner.'
-        owners[to] = True
-        owner_count.set(owner_count.get() + 1)
+        owner_invitations[to] = True
     elif tx_type == 'removeOwner':
         to = normalize_owner(to)
-        assert owners[to], 'Address is not an owner.'
-        assert owner_count.get() > 1, 'Cannot remove the last owner.'
-        owners[to] = False
-        owner_count.set(owner_count.get() - 1)
-        required_signatures.set(min(required_signatures.get(), owner_count.get()))
+        if owner_invitations[to]:
+            owner_invitations[to] = None
+        else:
+            assert owners[to], 'Address is not an owner.'
+            assert owner_count.get() > 1, 'Cannot remove the last owner.'
+            owners[to] = False
+            owner_count.set(owner_count.get() - 1)
+            required_signatures.set(min(required_signatures.get(), owner_count.get()))
     elif tx_type == 'changeRequirement':
         assert amount is not None, 'No new requirement specified.'
         new_requirement = int(amount)
+        assert amount == new_requirement, 'Requirement must be a whole number.'
         assert new_requirement > 0, 'Requirement must be greater than zero.'
         total_owners = owner_count.get()
         assert new_requirement <= total_owners, 'Requirement cannot be greater than number of owners.'
@@ -126,6 +130,13 @@ def execute_transaction(tx_id: int):
     transactions[tx_id, 'executed'] = True
 
     return f"Transaction {tx_id} executed."
+
+@export
+def accept_ownership():
+    assert owner_invitations[ctx.caller] is True, 'Only an invited owner (invitee) can accept.'
+    owner_invitations[ctx.caller] = None
+    owners[ctx.caller] = True
+    owner_count.set(owner_count.get() + 1)
 
 @export
 def change_currency_metadata(key: str, value: str):
