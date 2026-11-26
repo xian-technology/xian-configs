@@ -127,15 +127,6 @@ def uses_weighted_membership():
     ) and importlib.has_export(membership_name, "total_member_weight")
 
 
-def get_member_weight(account: str):
-    if uses_weighted_membership():
-        weight = membership().member_weight(account=account)
-        if weight is None:
-            return 0
-        return weight
-    return 1
-
-
 def get_total_member_weight():
     if uses_weighted_membership():
         total_weight = membership().total_member_weight()
@@ -161,60 +152,38 @@ def ceil_div(value: int, divisor: int):
     return (value + divisor - 1) // divisor
 
 
-def required_yes_votes(emergency: bool):
-    member_total = len(get_members_internal())
-    assert member_total > 0, "Governance requires at least one member."
-
-    numerator = metadata["approval_threshold_numerator"]
-    denominator = metadata["approval_threshold_denominator"]
+def threshold_for(total: int, emergency: bool):
     if emergency:
-        numerator = metadata["emergency_threshold_numerator"]
-        denominator = metadata["emergency_threshold_denominator"]
-
-    return ceil_div(member_total * numerator, denominator)
+        return ceil_div(
+            total * metadata["emergency_threshold_numerator"],
+            metadata["emergency_threshold_denominator"],
+        )
+    return ceil_div(
+        total * metadata["approval_threshold_numerator"],
+        metadata["approval_threshold_denominator"],
+    )
 
 
 def required_yes_votes_for_member_total(member_total: int, emergency: bool):
     assert member_total > 0, "Governance requires at least one member."
-
-    numerator = metadata["approval_threshold_numerator"]
-    denominator = metadata["approval_threshold_denominator"]
-    if emergency:
-        numerator = metadata["emergency_threshold_numerator"]
-        denominator = metadata["emergency_threshold_denominator"]
-
-    return ceil_div(member_total * numerator, denominator)
-
-
-def required_yes_weight(emergency: bool):
-    total_weight = get_total_member_weight()
-    assert total_weight > 0, "Governance requires positive voting weight."
-
-    numerator = metadata["approval_threshold_numerator"]
-    denominator = metadata["approval_threshold_denominator"]
-    if emergency:
-        numerator = metadata["emergency_threshold_numerator"]
-        denominator = metadata["emergency_threshold_denominator"]
-
-    return ceil_div(total_weight * numerator, denominator)
+    return threshold_for(member_total, emergency)
 
 
 def required_yes_weight_for_total(total_weight: int, emergency: bool):
     assert total_weight > 0, "Governance requires positive voting weight."
-
-    numerator = metadata["approval_threshold_numerator"]
-    denominator = metadata["approval_threshold_denominator"]
-    if emergency:
-        numerator = metadata["emergency_threshold_numerator"]
-        denominator = metadata["emergency_threshold_denominator"]
-
-    return ceil_div(total_weight * numerator, denominator)
+    return threshold_for(total_weight, emergency)
 
 
-def snapshot_member_weights(proposal_id: int):
+def snapshot_member_weights(proposal_id: int, members: list):
+    weighted = uses_weighted_membership()
+    member_contract = membership()
     total_weight = 0
-    for member in get_members_internal():
-        weight = get_member_weight(member)
+    for member in members:
+        weight = 1
+        if weighted:
+            weight = member_contract.member_weight(account=member)
+            if weight is None:
+                weight = 0
         proposal_vote_weights[proposal_id, member] = weight
         total_weight += weight
     return total_weight
@@ -235,8 +204,9 @@ def require_open_proposal(proposal_id: int):
 def initialize_proposal(proposal_id: int, kind: str, summary: str, emergency: bool):
     if summary is None:
         summary = ""
-    member_total = len(get_members_internal())
-    total_weight = snapshot_member_weights(proposal_id)
+    members = get_members_internal()
+    member_total = len(members)
+    total_weight = snapshot_member_weights(proposal_id, members)
     proposals[proposal_id, "kind"] = kind
     proposals[proposal_id, "summary"] = summary
     proposals[proposal_id, "proposer"] = ctx.caller
@@ -379,6 +349,7 @@ def propose_state_patch(
     emergency: bool = False,
 ):
     require_member()
+    assert isinstance(emergency, bool), "emergency must be a boolean."
     if summary is None:
         summary = ""
     if uri is None:
@@ -442,6 +413,7 @@ def propose_contract_call(
 
 @export
 def vote(proposal_id: int, support: bool):
+    assert isinstance(support, bool), "support must be a boolean."
     record_vote(proposal_id, support)
     return get_proposal(proposal_id)
 
@@ -525,9 +497,9 @@ def get_members():
 
 @export
 def required_votes_for(emergency: bool = False):
-    return required_yes_votes(emergency)
+    return required_yes_votes_for_member_total(len(get_members_internal()), emergency)
 
 
 @export
 def required_vote_weight_for(emergency: bool = False):
-    return required_yes_weight(emergency)
+    return required_yes_weight_for_total(get_total_member_weight(), emergency)

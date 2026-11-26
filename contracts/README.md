@@ -34,17 +34,22 @@ Native currency transfers reject mixed/uppercase 64-hex account spellings.
 `currency.validate_account` also enforces the 511-byte storage-key boundary;
 validator reward keys and slash destinations use the same validation before
 they can affect payouts.
-The foundation uses that account validation for its initial and replacement
-withdrawal owner. Chi conversion rates must be positive integers no larger
+Account keys exclude the VM's reserved `:` and `.` storage separators. Default
+currency genesis uses the same account validation for the founder allocation.
+Allocations to a shared account are added together.
+The foundation uses that account validation for its withdrawal owner.
+`change_owner` nominates a successor. The current owner can cancel until the
+nominee calls `accept_ownership`. Chi conversion rates must be positive integers no larger
 than `10**61 - 1` at both initialization and governance updates.
 
 ## Wallet and Governance Boundaries
 
-`vault.s.py` requires distinct, nonempty owners and a positive quorum no larger
-than the owner count. At least one owner must remain. Transaction execution
-counts approvals from current owners, so an approval from a removed owner
-cannot satisfy quorum. The canonical network bundles do not deploy this vault
-asset.
+`vault.s.py` requires distinct owners with valid currency accounts and a
+positive integer quorum no larger than the owner count. At least one owner
+must remain. A quorum-approved `addOwner` creates an invitation. Only the
+invitee can accept it, and a quorum can revoke it with `removeOwner`.
+Transaction execution counts approvals from current owners. The
+canonical network bundles omit this optional vault asset.
 
 State-patch votes must complete no later than the patch's activation height.
 An approval in that block is available to the block's commit-boundary patch
