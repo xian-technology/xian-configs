@@ -21,7 +21,8 @@ ApproveEvent = LogEvent(
 )
 
 
-def require_canonical_hex_account(account: str):
+def require_account(account: str):
+    assert account != "", "Account must be non-empty."
     if len(account) != 64 or account == account.lower():
         return
     for character in account:
@@ -54,14 +55,16 @@ def seed(
         "initial_supply must be numeric."
     )
     assert initial_supply >= 0, "initial_supply must be non-negative."
+    # Any one balance can hold the entire supply, and transfers use decimals.
+    assert initial_supply < 10**61, "initial_supply exceeds the decimal range."
     assert isinstance(initial_holder, str) and initial_holder != "", (
         "initial_holder must be non-empty."
     )
     assert isinstance(operator_address, str) and operator_address != "", (
         "operator_address must be non-empty."
     )
-    require_canonical_hex_account(initial_holder)
-    require_canonical_hex_account(operator_address)
+    require_account(initial_holder)
+    require_account(operator_address)
     balances[initial_holder] = initial_supply
     metadata["token_name"] = token_name
     metadata["token_symbol"] = token_symbol
@@ -75,6 +78,7 @@ def seed(
 @export
 def change_metadata(key: str, value: Any):
     assert ctx.caller == operator.get(), "Only operator can set metadata!"
+    assert key != "total_supply", "total_supply is managed by the contract."
     metadata[key] = value
 
 
@@ -84,7 +88,7 @@ def change_operator(new_operator: str):
     assert isinstance(new_operator, str) and new_operator != "", (
         "new_operator must be non-empty."
     )
-    require_canonical_hex_account(new_operator)
+    require_account(new_operator)
     operator.set(new_operator)
 
 
@@ -100,7 +104,7 @@ def balance_of(address: str):
 
 @export
 def transfer(amount: decimal, to: str):
-    require_canonical_hex_account(to)
+    require_account(to)
     assert amount > 0, "Cannot send negative balances!"
     assert balances[ctx.caller] >= amount, "Not enough coins to send!"
     balances[ctx.caller] -= amount
@@ -110,7 +114,7 @@ def transfer(amount: decimal, to: str):
 
 @export
 def approve(amount: decimal, to: str):
-    require_canonical_hex_account(to)
+    require_account(to)
     assert amount >= 0, "Cannot approve negative balances!"
     approvals[ctx.caller, to] = amount
     ApproveEvent({"from": ctx.caller, "to": to, "amount": amount})
@@ -118,7 +122,7 @@ def approve(amount: decimal, to: str):
 
 @export
 def transfer_from(amount: decimal, to: str, main_account: str):
-    require_canonical_hex_account(to)
+    require_account(to)
     assert amount > 0, "Cannot send negative balances!"
     assert approvals[main_account, ctx.caller] >= amount, (
         f"Not enough coins approved to send! "
