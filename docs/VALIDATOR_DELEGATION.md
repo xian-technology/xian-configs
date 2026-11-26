@@ -2,9 +2,8 @@
 
 ## Purpose
 
-This note defines the target validator policy model for Xian and the rollout
-path from the current manual `validators` governance flow to configurable
-validator selection with on-chain delegation and reward splitting.
+The `validators` system contract defines validator membership, selection,
+on-chain delegation, and reward distribution.
 
 The canonical contract source remains
 `xian-configs/contracts/validators.s.py`, deployed into genesis as
@@ -12,7 +11,8 @@ The canonical contract source remains
 
 ## Current State
 
-- Validator membership is governed manually through `validators`.
+- The network's selection mode controls how `validators` changes membership.
+  The local and draft mainnet bundles start in manual mode.
 - The active validator set is the on-chain list `validators.active_validators`.
 - Active validators and pending or approved candidates share a fixed pool of
   64 accounts. `max_validators` is limited to 1–64. Registration refuses a full
@@ -96,7 +96,7 @@ Recommended defaults:
 - `selection_mode = "manual"` during rollout
 - `max_validators = 5`
 - `power_mode = "equal"`
-- `rebalance_interval` measured in epochs, not blocks
+- `rebalance_interval` measured in blocks
 - `manual_override_enabled = True`
 - `slash_destination = "dao"` until a burn or community-pool path is introduced
 - `duplicate_vote_slash_bps = 500`
@@ -106,8 +106,7 @@ Recommended defaults:
 
 Implementation note for the current contract:
 
-- until a dedicated epoch driver exists, selection epochs are derived from
-  `block_num // rebalance_interval`
+- the selection epoch is `block_num // rebalance_interval`
 - active genesis bundles under `xian-configs/contracts/contracts_<bundle>.json`
   should pin every shipped validator policy field explicitly at genesis
 - public `rebalance()` is limited to once per derived epoch
@@ -654,7 +653,7 @@ ABCI integration requirements:
 - `validators.powers:<vk>` is the effective CometBFT power source
 - `validators.reward_keys:<vk>` is the operator reward key source
 
-ABCI reward handling should evolve as follows:
+The fee reward path uses the Rust block executor:
 
 - keep reading the active validator list from `validators.active_validators`
 - for each validator reward allotment, the block executor reads
@@ -750,34 +749,6 @@ Governance vote types should eventually include:
   reward pool before operator commission and delegation splitting.
 - Registration bond and self-bond are distinct balances.
 
-## Rollout Plan
-
-### Phase 1
-
-- Keep `selection_mode = manual`.
-- Add validator commission, self-bond, delegation state, undelegation queues,
-  and reward splitting.
-- Update ABCI reward handling to split validator rewards between operator and
-  delegators.
-
-### Phase 2
-
-- Add policy config and exported views for automatic selection.
-- Add epoch rebalance logic behind `auto_top_n` and `hybrid`.
-- Keep `power_mode = equal`.
-
-### Phase 3
-
-- Add governance-controlled slashing on bonded stake, with optional
-  `infraction_height` support for pending-unbond slashability.
-- Route slashed value to a configurable slash destination.
-- Add stronger performance protections for large delegator sets.
-
-### Phase 4
-
-- Add fuller evidence coverage if CometBFT expands delivered misbehavior types.
-- Revisit stake-weighted consensus power only if required.
-
 ## Implementation Notes
 
 - Canonical contract source: `xian-configs/contracts/validators.s.py`
@@ -785,18 +756,9 @@ Governance vote types should eventually include:
 - Fee reward split (block executor, Rust): `xian-contracting/packages/xian-vm-core/src/tx_rewards.rs`
 - ABCI validator updates: `xian-abci/src/xian/validators.py`
 
-The current contract now covers:
+## Follow-Ups
 
-- Phase 1 reward split and delegation primitives
-- Phase 2 automatic selection and policy controls
-- validator-exit forced unbond sweeps with owner-indexed pending unbond lookup
-- governance-controlled jailing and unjailing
-- governance-controlled slashing on live stake and prior-infraction pending
-  unbonds
-- ABCI-driven evidence penalties for duplicate vote and light-client attack
-- persistent validator-address resolution for evidence even after validator exit
-- ABCI-driven epoch rebalances without requiring a user-submitted `rebalance()`
-
-The main remaining gaps are:
-
-- governance confirmation of the default evidence penalty table
+- Confirm the default evidence penalty table through governance.
+- Review performance protections for large delegator sets.
+- Expand evidence coverage if CometBFT delivers additional misbehavior types.
+- Revisit stake-weighted consensus power if required.

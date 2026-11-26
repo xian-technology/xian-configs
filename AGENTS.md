@@ -25,9 +25,10 @@
 - Keep GitHub references under `xian-technology`.
 
 ## Validation
-- Validate moved assets with the consuming repos:
-  - `xian-abci`: `./scripts/validate-repo.sh`
-  - `xian-stack`: `make validate` and `make smoke`
+- Manifest and asset validation: `uv run --project ../xian-cli python ./scripts/validate-manifests.py`
+- Tests: `uv run --project ../xian-cli --group dev python -m pytest -q tests`
+- Exercise affected runtime behavior in the consuming repos when changing
+  system contracts or node configuration.
 
 ## Notes
 - This repo is data-first. Expect docs and structure changes more often than

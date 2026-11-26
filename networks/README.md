@@ -1,8 +1,8 @@
 # Network Bundles
 
 ## Purpose
-- This folder contains canonical bundle manifests used to build deterministic
-  test and development networks.
+- This folder contains the canonical local development and draft mainnet
+  manifests.
 
 ## Contents
 - one directory per supported genesis bundle
@@ -30,12 +30,11 @@
   unset. A draft `mainnet` must list pinning it
   under `genesis_build.finalization_required`; once `genesis_build.status` is no
   longer `draft-rehearsal`, the validator requires the pin.
-- The canonical `mainnet` bundle is an explicit draft rehearsal. It uses `local_build` and pin the unmodified CometBFT 0.40.0 source commit
-  and archive checksum in their intended build recipes. They carry no registry
-  image digests until matching images are published and accepted. The recipe is
-  build intent, not an attestation of a previously published image. Finalization
-  must refresh all component/build inputs and pin both immutable image digests;
-  the validator requires registry images once the draft status is removed.
+- The draft mainnet uses `local_build` and pins the unmodified CometBFT 0.40.0
+  source commit and archive checksum in its build recipe. Finalization must
+  refresh the component and build inputs and pin the integrated registry image
+  by digest. The validator requires a registry image once the draft status is
+  removed.
 - A release recipe cannot name its own containing Git commit. A metadata-only
   follow-up can pin the preceding source commit after proving its contract and
   code trees are unchanged. The complete image build manifest is authoritative
