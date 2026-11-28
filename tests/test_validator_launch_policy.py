@@ -1,5 +1,6 @@
 """The validator-set launch policy: manual start, minimum stake, bounded churn."""
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -398,3 +399,114 @@ def test_full_validator_set_can_govern_its_largest_rebalance_within_the_chi_cap(
 
     assert deciding_vote["result"]["status"] == "approved"
     assert validators.get_members() == nodes[:1]
+
+
+def test_genesis_binds_mldsa_keys_to_separate_operator_accounts(client):
+    keys = {NODE1: "ac" * 1952, NODE2: "bd" * 1952}
+    _, validators = _deploy(client, genesis_consensus_keys=keys)
+    assert validators.get_members() == [NODE1, NODE2]
+    assert client.raw_driver.get("validators.consensus_key_type") == "ml_dsa_65"
+    for account, key in keys.items():
+        address = hashlib.sha256(bytes.fromhex(key)).hexdigest()[:40]
+        assert (
+            client.raw_driver.get(f"validators.consensus_public_keys:{account}") == key
+        )
+        assert client.raw_driver.get(f"validators.consensus_keys:{address}") == account
+        old_address = hashlib.sha256(bytes.fromhex(account)).hexdigest()[:40]
+        assert client.raw_driver.get(f"validators.consensus_keys:{old_address}") is None
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        {},
+        {NODE1: "ac" * 1952},
+        {NODE1: "ac" * 1952, NODE2: "ac" * 1952},
+        {NODE1: "ac" * 1952, NODE2: "bd" * 1952, CANDIDATES[0]: "ac" * 1952},
+        {NODE1: "ac" * 1952, NODE2: "BD" * 1952},
+        {NODE1: "ac" * 1952, NODE2: NODE2},
+        {NODE1: "ac" * 1952, NODE2: "00" * 1951 + "xx"},
+        {NODE1: "ac" * 1952, NODE2: "00" * 1951 + "  "},
+    ],
+)
+def test_invalid_genesis_consensus_bindings_fail_closed(client, keys):
+    with pytest.raises(
+        (AssertionError, RuntimeError), match="[Cc]onsensus|hexadecimal"
+    ):
+        _deploy(client, genesis_consensus_keys=keys)
+
+
+def test_candidate_proves_key_ownership_for_this_chain_and_retains_binding(client):
+    from pqcrypto.sign import ml_dsa_65
+
+    account, other = CANDIDATES[:2]
+    chain = "validator-proof-local"
+    key_bytes, secret = ml_dsa_65.generate_keypair()
+    key = key_bytes.hex()
+    key_address = hashlib.sha256(key_bytes).hexdigest()[:40]
+    currency, validators = _deploy(
+        client, genesis_consensus_keys={NODE1: "ac" * 1952, NODE2: "bd" * 1952}
+    )
+    client.raw_driver.set("_accounts.policy", {"version": 2, "transition_chi": 100})
+    client.raw_driver.commit()
+    for member in (account, other):
+        currency.transfer(amount=2000, to=member, signer="founder")
+        currency.approve(amount=2000, to="validators", signer=member)
+
+    def register(member, network, signature, **overrides):
+        validators.register(
+            signer=member,
+            environment={"chain_id": network},
+            consensus_public_key=overrides.get("key", key),
+            consensus_proof=signature,
+        )
+
+    message = f"xian-validator-key-v1\n{chain}\n{account}\n{key}".encode()
+    proof = ml_dsa_65.sign(secret, message).hex()
+    for member, network in [(other, chain), (account, chain + "-other")]:
+        with pytest.raises(AssertionError, match="possession"):
+            register(member, network, proof)
+    with pytest.raises(AssertionError, match="possession"):
+        register(account, chain, "00" * 3309)
+    with pytest.raises(AssertionError, match="possession"):
+        register(account, chain, None)
+    assert currency.balance_of(address=account) == 2000
+    assert client.raw_driver.get(f"validators.consensus_keys:{key_address}") is None
+
+    currency.transfer(amount=30000, to=account, signer="founder")
+    # The entire contract call, including checking possession and indexing the
+    # key, must fit the canonical local transaction budget.
+    result = validators.register(
+        signer=account,
+        environment={"chain_id": chain},
+        consensus_public_key=key,
+        consensus_proof=proof,
+        chi=200000,
+        metering=True,
+        return_full_output=True,
+    )
+    assert result["status_code"] == 0, result["result"]
+    assert 0 < result["chi_used"] < 200000
+    assert client.raw_driver.get(f"validators.consensus_keys:{key_address}") == account
+    validators.unregister(signer=account)
+    # A second account that can have the same key sign cannot take its historical binding.
+    other_message = f"xian-validator-key-v1\n{chain}\n{other}\n{key}".encode()
+    with pytest.raises(AssertionError, match="already registered"):
+        register(other, chain, ml_dsa_65.sign(secret, other_message).hex())
+    with pytest.raises(AssertionError, match="immutable"):
+        register(account, chain, None, key="ef" * 1952)
+    validators.register(signer=account)
+    assert client.raw_driver.get(f"validators.consensus_public_keys:{account}") == key
+
+
+def test_legacy_registration_rejects_separate_consensus_credentials(client):
+    currency, validators = _deploy(client)
+    member = CANDIDATES[0]
+    currency.transfer(amount=1000, to=member, signer="founder")
+    currency.approve(amount=1000, to="validators", signer=member)
+    with pytest.raises(AssertionError, match="ML-DSA-65"):
+        validators.register(consensus_public_key="ab" * 1952, signer=member)
+    with pytest.raises(AssertionError, match="ML-DSA-65"):
+        validators.register(consensus_proof="00" * 3309, signer=member)
+    validators.register(signer=member)
+    assert client.raw_driver.get(f"validators.consensus_public_keys:{member}") is None

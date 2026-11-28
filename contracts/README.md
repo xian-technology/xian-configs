@@ -55,3 +55,39 @@ State-patch votes must complete no later than the patch's activation height.
 An approval in that block is available to the block's commit-boundary patch
 phase. After that height, members must submit a new proposal with a future
 activation height and matching patch bundle.
+
+## Validator and account keys
+
+A fresh network may supply `genesis_consensus_keys` to the `validators`
+constructor. Supply exactly one lowercase 3,904-character ML-DSA-65 public key
+per genesis member, indexed by the unchanged 64-hex account handle. The node
+must use the same consensus suite and signing keys in CometBFT genesis. The
+canonical local and draft mainnet recipes omit this option.
+
+In that configuration, a new operator calls `validators.register` directly
+from its account with `consensus_public_key` and `consensus_proof`. The latter
+is a lowercase hex encoding of a 3,309-byte, pure ML-DSA-65 signature with an
+empty FIPS 204 context. Join the following UTF-8 lines with LF and omit the
+trailing LF.
+
+```text
+xian-validator-key-v1
+<chain_id>
+<operator_account>
+<lowercase_consensus_public_key_hex>
+```
+
+The operator proves possession once. Re-registration of the same account uses
+the original key and omits both arguments. To replace an operator or its
+consensus key, admit a new member under a distinct binding and remove the old
+member using the normal validator selection rules. Historical evidence and
+rewards keep their original account mapping. Only `validators` records bindings.
+Generate and back up account, recovery and consensus signing keys separately.
+
+With a native hybrid account record, the currency permit callback rejects
+third-party approvals for that owner. The strict version 2 account policy
+disables this callback for all owners. The owner's ordinary `approve` and the
+spender's use of existing allowances follow the usual transaction authorization.
+Selecting a future strict genesis for imported user balances requires explicit
+custody records for their existing handles. The allocation ledger contains
+no such records.

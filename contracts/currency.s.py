@@ -1,6 +1,8 @@
 balances = Hash(default_value=0)
 approvals = Hash(default_value=0)
 metadata = Hash()
+account_policy = ForeignVariable(foreign_contract="_accounts", foreign_name="policy")
+account_records = ForeignHash(foreign_contract="_accounts", foreign_name="records")
 
 GOVERNANCE_CONTRACT = "governance"
 
@@ -189,6 +191,10 @@ def approve_from_authorizer(owner: str, spender: str, amount: decimal):
     )
     assert amount >= 0, "Cannot approve negative balances."
 
+    policy = account_policy.get()
+    assert (policy is None or policy["version"] == 1) and account_records[owner] is None, (
+        "Native account policy disables legacy permit approvals."
+    )
     approvals[owner, spender] = amount
 
     ApproveEvent({"from": owner, "to": spender, "amount": amount})

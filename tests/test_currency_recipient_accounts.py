@@ -132,3 +132,39 @@ def test_active_validator_cannot_poison_all_fee_rewards_with_an_oversized_key(
         validators.update_profile(reward_key=reward_key, signer=KEY)
 
     assert validators.get_validator(account=KEY)["reward_key"] == KEY
+
+
+@pytest.mark.parametrize(
+    ("policy", "registered", "allowed"),
+    [
+        (None, False, True),
+        ({"version": 1, "enrollment_open": True, "transition_chi": 100}, False, True),
+        ({"version": 1, "enrollment_open": True, "transition_chi": 100}, True, False),
+        ({"version": 2, "transition_chi": 100}, False, False),
+        ({"version": 3}, False, False),
+    ],
+)
+def test_permit_callback_respects_native_account_authority(client, policy, registered, allowed):
+    client.submit(SOURCE, name="currency", constructor_args={"vk": KEY})
+    client.submit(
+        "import currency\n@export\ndef relay(owner: str):\n"
+        "    currency.approve_from_authorizer(owner=owner, spender=ctx.signer, amount=1)",
+        name="permit_authorizer",
+    )
+    if policy is not None:
+        client.raw_driver.set("_accounts.policy", policy)
+    if registered:
+        # The presence of any native account record closes the legacy path.
+        client.raw_driver.set("_accounts.records:" + KEY, {"epoch": 1})
+    client.raw_driver.commit()
+    token = client.get_contract_proxy("currency")
+    authorizer = client.get_contract_proxy("permit_authorizer")
+    if allowed:
+        authorizer.relay(owner=KEY, signer="relayer")
+        assert token.approvals[KEY, "relayer"] == 1
+    else:
+        with pytest.raises(AssertionError, match="permit"):
+            authorizer.relay(owner=KEY, signer="relayer")
+        assert client.raw_driver.get(f"currency.approvals:{KEY}:relayer") is None
+        token.approve(amount=1, to="spender", signer=KEY)
+        assert token.approvals[KEY, "spender"] == 1

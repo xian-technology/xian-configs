@@ -58,6 +58,8 @@ registry_count = Variable()
 registry_accounts = Hash(default_value=None)
 known_validators = Hash(default_value=False)
 consensus_keys = Hash(default_value=None)
+consensus_key_type = Variable()
+consensus_public_keys = Hash()
 
 powers = Hash(default_value=0)
 requested_power = Hash(default_value=0)
@@ -269,6 +271,7 @@ def seed(
     downtime_jail_blocks: int = DEFAULT_DOWNTIME_JAIL_BLOCKS,
     downtime_slash_bps: int = DEFAULT_DOWNTIME_SLASH_BPS,
     downtime_unjail_cooldown_hours: int = DEFAULT_DOWNTIME_UNJAIL_COOLDOWN_HOURS,
+    genesis_consensus_keys: dict = None,
 ):
     assert is_number(genesis_registration_fee), "registration_fee must be numeric."
     assert genesis_registration_fee > 0, "registration_fee <= 0"
@@ -309,15 +312,23 @@ def seed(
         validate_policy_value(key, seeded_policy[key])
         config[key] = seeded_policy[key]
 
+    if genesis_consensus_keys is not None:
+        assert len(genesis_consensus_keys) == len(genesis_nodes), "Invalid genesis consensus keys."
+        consensus_key_type.set("ml_dsa_65")
+
     active_nodes = []
     for node in genesis_nodes:
         require_canonical_validator_key(node)
         if node in active_nodes:
+            assert genesis_consensus_keys is None, "Duplicate genesis consensus member."
             continue
 
         require_selection_capacity(node, active_nodes)
         active_nodes.append(node)
-        track_validator(node)
+        public_key = None
+        if genesis_consensus_keys is not None:
+            public_key = genesis_consensus_keys.get(node)
+        track_validator(node, public_key, genesis=True)
         statuses[node] = STATUS_ACTIVE
         registered_at[node] = now
         joined_at[node] = now
@@ -374,10 +385,6 @@ def normalize_reason(reason: str = None):
     return reason
 
 
-def normalize_jail_reason(reason: str = None):
-    return normalize_reason(reason)
-
-
 def is_integer(value: Any):
     return isinstance(value, int) and isinstance(value, bool) == False
 
@@ -427,21 +434,11 @@ def validate_object_argument(arg: Any, allowed_keys: list, required_keys: list):
 
 
 def active_nodes_list():
-    current_nodes = active_validators.get()
-    if current_nodes is None:
-        return []
-    return current_nodes
+    return active_validators.get() or []
 
 
 def candidate_list():
-    current_candidates = candidates.get()
-    if current_candidates is None:
-        return []
-    return current_candidates
-
-
-def owner_pending_unbond_ids(owner: str):
-    return pending_unbond_ids("owner", owner)
+    return candidates.get() or []
 
 
 def pending_unbond_ids(kind: str, account: str):
@@ -483,29 +480,19 @@ def validator_registry_list():
 
 
 def without_item(items: list, item: str):
-    next_items = []
-    for current_item in items:
-        if current_item != item:
-            next_items.append(current_item)
-    return next_items
+    return [current for current in items if current != item]
 
 
 def effective_requested_power(account: str):
     power = requested_power[account]
-    if power is None:
-        return DEFAULT_VALIDATOR_POWER
-    if power <= 0:
+    if power is None or power <= 0:
         return DEFAULT_VALIDATOR_POWER
     return power
 
 
 def effective_active_power(account: str):
     power = powers[account]
-    if power is None:
-        if account in active_nodes_list():
-            return effective_requested_power(account)
-        return 0
-    if power <= 0:
+    if power is None or power <= 0:
         if account in active_nodes_list():
             return effective_requested_power(account)
         return 0
@@ -514,9 +501,7 @@ def effective_active_power(account: str):
 
 def effective_reward_key(account: str):
     reward_key = reward_keys[account]
-    if reward_key is None:
-        return account
-    if reward_key == "":
+    if reward_key is None or reward_key == "":
         return account
     return reward_key
 
@@ -794,10 +779,35 @@ def next_unbond_id():
     return unbond_id
 
 
-def track_validator(account: str):
+def consensus_address(account: str, public_key: str, proof: str, genesis: bool):
+    assert isinstance(public_key, str) and len(public_key) == 3904, (
+        "Consensus public key must be 1952 bytes."
+    )
+    assert public_key == public_key.lower(), "Consensus public key must be lowercase hex."
+    address = hashlib.sha256_hex(public_key)[:40]
+    if not genesis:
+        assert isinstance(proof, str), "Consensus key proof of possession required."
+        separator = chr(10)
+        message = (
+            "xian-validator-key-v1" + separator + chain_id
+            + separator + account + separator + public_key
+        )
+        assert crypto.verify_ml_dsa_65(public_key, message, proof), (
+            "Invalid consensus key proof of possession."
+        )
+    return address
+
+
+def track_validator(account: str, public_key: str = None, proof: str = None, genesis: bool = False):
     if known_validators[account]:
+        assert public_key is None and proof is None, "Consensus key is immutable."
         return
-    address = hashlib.sha256_hex(account)[:40]
+    if consensus_key_type.get() is None:
+        assert public_key is None and proof is None, "Separate consensus keys require ML-DSA-65."
+        address = hashlib.sha256_hex(account)[:40]
+    else:
+        address = consensus_address(account, public_key, proof, genesis)
+        consensus_public_keys[account] = public_key
     existing = consensus_keys[address]
     assert existing is None or existing == account, (
         "Consensus address already registered."
@@ -1282,20 +1292,9 @@ def require_not_last_active_validator(account: str):
     )
 
 
-def required_yes_weight(total_weight: int):
-    assert total_weight > 0, "No voting weight."
-    return ceil_div(
-        total_weight * PASS_THRESHOLD_NUMERATOR,
-        PASS_THRESHOLD_DENOMINATOR,
-    )
-
-
-def required_yes_votes(member_count: int):
-    assert member_count > 0, "No validators."
-    return ceil_div(
-        member_count * PASS_THRESHOLD_NUMERATOR,
-        PASS_THRESHOLD_DENOMINATOR,
-    )
+def required_yes(total: int, empty_error: str):
+    assert total > 0, empty_error
+    return ceil_div(total * PASS_THRESHOLD_NUMERATOR, PASS_THRESHOLD_DENOMINATOR)
 
 
 def snapshot_vote_weights(proposal_id: int):
@@ -1305,13 +1304,6 @@ def snapshot_vote_weights(proposal_id: int):
         vote_weights[proposal_id, node] = weight
         total_weight += weight
     return total_weight
-
-
-def active_member_snapshot():
-    snapshot = []
-    for node in active_nodes_list():
-        snapshot.append(node)
-    return snapshot
 
 
 def store_vote_record(proposal_id: int, voter: str, vote: str, weight: int):
@@ -1437,7 +1429,7 @@ def jail_validator(account: str, reason: str = None):
     assert is_jailed(account) == False, "Already jailed."
 
     jailed[account] = True
-    jail_reasons[account] = normalize_jail_reason(reason)
+    jail_reasons[account] = normalize_reason(reason)
     last_jailed_at[account] = now
     pending_leave[account] = False
     powers[account] = 0
@@ -1828,7 +1820,7 @@ def propose_vote(type_of_vote: str, arg: Any):
 
     total_weight_snapshot = snapshot_vote_weights(proposal_id)
     proposer_weight = vote_weights[proposal_id, ctx.caller]
-    member_snapshot = active_member_snapshot()
+    member_snapshot = active_nodes_list()
 
     votes[proposal_id] = {
         "yes": 1,
@@ -1845,8 +1837,8 @@ def propose_vote(type_of_vote: str, arg: Any):
         "member_snapshot": member_snapshot,
         "member_count_snapshot": len(member_snapshot),
         "total_weight_snapshot": total_weight_snapshot,
-        "required_yes_votes": required_yes_votes(len(member_snapshot)),
-        "required_yes_weight": required_yes_weight(total_weight_snapshot),
+        "required_yes_votes": required_yes(len(member_snapshot), "No validators."),
+        "required_yes_weight": required_yes(total_weight_snapshot, "No voting weight."),
     }
 
     ValidatorProposalSubmittedEvent(
@@ -2387,6 +2379,8 @@ def register(
     moniker: str = "",
     network_endpoint: str = "",
     metadata_uri: str = "",
+    consensus_public_key: str = None,
+    consensus_proof: str = None,
 ):
     if requested_validator_power is None:
         requested_validator_power = DEFAULT_VALIDATOR_POWER
@@ -2397,8 +2391,7 @@ def register(
     if metadata_uri is None:
         metadata_uri = ""
 
-    # The registering identity becomes the validator's consensus key, so it
-    # must be the signing account itself, never a contract acting for it.
+    # Validator membership belongs to a signing account.
     assert ctx.caller == ctx.signer, "Validators must register from their own account."
     # Hex case variants verify with the same key; only one spelling may register.
     require_canonical_validator_key(ctx.caller)
@@ -2416,7 +2409,7 @@ def register(
         main_account=ctx.caller,
     )
 
-    track_validator(ctx.caller)
+    track_validator(ctx.caller, consensus_public_key, consensus_proof)
     holdings[ctx.caller] = holdings[ctx.caller] + registration_fee.get()
     pending_registrations[ctx.caller] = True
     statuses[ctx.caller] = STATUS_PENDING
@@ -2626,7 +2619,7 @@ def get_pending_unbond(unbond_id: int):
 
 @export
 def get_pending_unbond_ids(owner: str):
-    return owner_pending_unbond_ids(owner)
+    return pending_unbond_ids("owner", owner)
 
 
 @export
